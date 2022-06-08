@@ -46,6 +46,6 @@ def get_chat_name(event: events.NewMessage.Event) -> str:
         if event.chat.first_name:
             name += event.chat.first_name.strip()
         if event.chat.last_name:
-            name += ' ' + event.chat.last_name.strip()
+            name += f' {event.chat.last_name.strip()}'
         return name
     return event.chat.title

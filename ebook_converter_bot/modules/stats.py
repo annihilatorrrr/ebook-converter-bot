@@ -21,12 +21,16 @@ async def stats(event):
               f"$output_formats\n" \
               f"**Top input formats**:\n" \
               f"$input_formats\n"
-    output_formats_message = ""
-    for output_format, count in output_formats.items():
-        output_formats_message += f"    __{output_format}__: {str(count)} times.\n"
-    input_formats_message = ""
-    for input_format, count in input_formats.items():
-        input_formats_message += f"    __{input_format}__: {str(count)} times.\n"
+    output_formats_message = "".join(
+        f"    __{output_format}__: {str(count)} times.\n"
+        for output_format, count in output_formats.items()
+    )
+
+    input_formats_message = "".join(
+        f"    __{input_format}__: {str(count)} times.\n"
+        for input_format, count in input_formats.items()
+    )
+
     message = message.replace('$output_formats', output_formats_message)
     message = message.replace('$input_formats', input_formats_message)
 

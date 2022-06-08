@@ -17,6 +17,6 @@ async def restart(event):
         'chat': restart_message.chat_id,
         'message': restart_message.id
     }
-    with open(f"restart.pickle", "wb") as out:
+    with open("restart.pickle", "wb") as out:
         pickle.dump(chat_info, out)
     execl(executable, executable, "-m", "ebook_converter_bot")

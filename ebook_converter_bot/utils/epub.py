@@ -27,7 +27,7 @@ def fix_content_opf_problems(input_file):
                     manifest_wrong_list_pos = content.find('<item id="page_1"')
                     manifest_correct_list_pos = content.rfind('<item id="page_1"')
                     manifest_end_pos = content.find('</manifest>')
-                    spine_line = re.search(r'<spine .*\n', content).group(0)
+                    spine_line = re.search(r'<spine .*\n', content)[0]
                     spine_correct_list_pos = content.rfind('<itemref idref="page_1"')
                     new_content = content[:manifest_wrong_list_pos] \
                                   + content[manifest_correct_list_pos:manifest_end_pos] \

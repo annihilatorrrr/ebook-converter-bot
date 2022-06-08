@@ -15,8 +15,9 @@ async def preferences_handler(event: events.NewMessage.Event):
     lang = get_lang(event.chat_id)
     buttons = [Button.inline(_("Language", lang), data="update_language")]
     message = _("**Available bot preferences:**", lang)
-    await event.respond(message, buttons=buttons) \
-        if not hasattr(event, 'data') else await event.edit(message, buttons=buttons)
+    await event.edit(message, buttons=buttons) if hasattr(
+        event, 'data'
+    ) else await event.respond(message, buttons=buttons)
 
 
 @BOT.on(events.CallbackQuery(pattern='update_language'))
