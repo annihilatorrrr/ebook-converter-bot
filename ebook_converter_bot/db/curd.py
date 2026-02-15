@@ -7,10 +7,12 @@ from ebook_converter_bot.db.session import session
 
 
 def generate_analytics_columns(formats: list[str]) -> None:
-    if not session.query(Analytics).first():
-        formats_columns = [Analytics(format=i) for i in formats]
-        session.add_all(formats_columns)
-        session.commit()
+    existing = {row[0] for row in session.query(Analytics.format).all()}
+    missing = [f for f in formats if f not in existing]
+    if not missing:
+        return
+    session.add_all([Analytics(format=i) for i in missing])
+    session.commit()
 
 
 def update_format_analytics(file_format: str, output: bool = False) -> None:
