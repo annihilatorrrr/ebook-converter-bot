@@ -19,8 +19,22 @@ dependencies = [
 dev = [
     "ruff>=0.8.1",
     "pre-commit>=4.0.0",
-    "mypy>=1.18.2",
+    "ty>=0.0.15",
 ]
+
+[tool.ty.environment]
+python-version = "3.14"
+
+[tool.ty.rules]
+unresolved-import = "ignore"
+
+[[tool.ty.overrides]]
+include = ["ebook_converter_bot/db/models/**"]
+rules = { invalid-assignment = "ignore" }
+
+[[tool.ty.overrides]]
+include = ["ebook_converter_bot/db/curd.py"]
+rules = { invalid-argument-type = "ignore", no-matching-overload = "ignore", unresolved-attribute = "ignore" }
 
 [tool.ruff]  # https://github.com/charliermarsh/ruff
 fix = true
@@ -36,17 +50,3 @@ unfixable = ["ERA001", "F401", "F841", "T201", "T203"]
 [tool.ruff.format]
 quote-style = "double"
 line-ending = "lf"
-
-[tool.mypy]
-files = ["ebook_converter_bot"]
-ignore_missing_imports = true
-disallow_untyped_defs = true
-#disallow_any_unimported = true
-no_implicit_optional = true
-check_untyped_defs = true
-warn_return_any = true
-show_error_codes = true
-warn_unused_ignores = true
-disallow_incomplete_defs = true
-disallow_untyped_decorators = false
-plugins = ["sqlalchemy.ext.mypy.plugin"]

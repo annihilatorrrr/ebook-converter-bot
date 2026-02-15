@@ -13,9 +13,9 @@ pre-commit:
       run: uv run ruff format {staged_files}
       stage_fixed: true
 
-    mypy:
+    ty:
       glob: '*.py'
-      run: 'uv run mypy {staged_files} --install-types --non-interactive'
+      run: uv run ty check ebook_converter_bot --output-format concise
 
 post-merge:
   parallel: true
