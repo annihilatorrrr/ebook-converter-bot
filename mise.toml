@@ -1,7 +1,10 @@
 [tools]
 python = '3.14.3'
-uv = 'latest'
-lefthook = 'latest'
+"aqua:astral-sh/uv" = "0.10.2"
+"aqua:evilmartians/lefthook" = "2"
 
 [tasks.default]
-run = 'python3 -m ebook_converter_bot'
+run = 'uv run -m ebook_converter_bot'
+
+[tasks.dev]
+run = 'uv run jurigged -v -m ebook_converter_bot'

@@ -17,9 +17,10 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "ruff>=0.8.1",
-    "pre-commit>=4.0.0",
+    "ipython>=9.7.0",
+    "ruff>=0.14.4",
     "ty>=0.0.15",
+    "jurigged>=0.6.1",
 ]
 
 [tool.ty.environment]
