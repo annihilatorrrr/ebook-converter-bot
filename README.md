@@ -12,7 +12,7 @@
 [![Liberapay](https://img.shields.io/badge/Liberapay-Support-F6C915?style=flat&labelColor=F6C915&logo=Liberapay&logoColor=white&link=https://liberapay.com/yshalsager)](https://liberapay.com/yshalsager)
 
 A bot that converts e-books to various formats, powered by [calibre](https://calibre-ebook.com/)!
-It currently supports 34 input formats and 20 output formats.
+It currently supports 36 input formats and 20 output formats.
 
 You can start using it or adding it to your group [here on Telegram](https://t.me/ebook_converter_bot).
 
@@ -30,10 +30,10 @@ This bot aims to provide an easy way for telegram users to convert e-books from 
 It supports converting from the following formats:
 
 ```python
-['azw', 'azw3', 'azw4', 'azw8', 'cb7', 'cbc', 'cbr', 'cbz', 'chm', 'djvu', 'docx',
- 'doc', 'epub', 'fb2', 'fbz', 'html', 'htmlz', 'kfx', 'kfx-zip', 'kpf', 'lit',
- 'lrf', 'mobi', 'odt', 'opf', 'pdb', 'pml', 'prc', 'rb', 'rtf', 'snb', 'tcr',
- 'txt', 'txtz']
+['azw', 'azw3', 'azw4', 'azw8', 'bok', 'cb7', 'cbc', 'cbr', 'cbz', 'chm', 'djvu',
+ 'doc', 'docx', 'epub', 'fb2', 'fbz', 'html', 'htmlz', 'kfx', 'kfx-zip', 'kpf',
+ 'lit', 'lrf', 'md', 'mobi', 'odt', 'opf', 'pdb', 'pml', 'prc', 'rb', 'rtf',
+ 'snb', 'tcr', 'txt', 'txtz']
 ```
 
 To the following formats:
@@ -48,6 +48,7 @@ Some more features of the bot:
 - Force book direction to be RTL
 - Multilingual support, you can contribute and add your own languages if you want :).
 - Flatten book's table of contents.
+- Convert Shamela old `.bok` files by first generating an EPUB in Python then using the existing calibre pipeline for other outputs.
 
 ## Usage
 
@@ -153,3 +154,13 @@ language file with translation and compile.
 ```bash
 LANG=ar make i18n-init-lang
 ```
+
+## `.bok` Notes
+
+Shamela old `.bok` files are first converted to an intermediate EPUB in pure Python (using `access-parser`), then (if the requested output isn't EPUB) calibre is used to convert that EPUB to the requested format.
+
+For local debugging, there's also a small CLI wrapper:
+
+```bash
+uv run scripts/bok_to_epub.py path/to/book.bok
+```w
