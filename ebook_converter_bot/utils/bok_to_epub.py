@@ -82,7 +82,7 @@ def fix_arabic_mojibake(value: str) -> str:
     return decoded if ARABIC_RE.search(decoded) else value
 
 
-def decode_bytes(b: bytes) -> str:
+def decode_bytes(b: bytes | bytearray | memoryview) -> str:
     u8 = bytes(b)
     zero_count = sum(1 for i in range(1, len(u8), 2) if u8[i] == 0)
     maybe_utf16 = len(u8) >= UTF16_MIN_BYTES and zero_count / max(1, len(u8) / 2) > UTF16_NULL_RATIO

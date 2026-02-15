@@ -6,7 +6,7 @@ from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 from sys import stderr, stdout
 
-WORK_DIR = Path(__package__).absolute()
+WORK_DIR = Path(__file__).resolve().parent
 PARENT_DIR = WORK_DIR.parent
 
 # read bot config

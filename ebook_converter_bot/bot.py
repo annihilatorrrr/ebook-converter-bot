@@ -4,8 +4,10 @@ import asyncio
 import json
 import logging
 from pathlib import Path
+from typing import cast
 
 from telethon import TelegramClient
+from telethon.tl.types import User
 
 from ebook_converter_bot import API_HASH, API_KEY, BOT_TOKEN
 from ebook_converter_bot.db.curd import generate_analytics_columns
@@ -32,7 +34,7 @@ def main() -> None:
 
 async def run() -> None:
     """Run the bot."""
-    bot_info = await BOT.get_me()
+    bot_info = cast(User, await BOT.get_me())
     BOT_INFO.update({"name": bot_info.first_name, "username": bot_info.username, "id": bot_info.id})
     LOGGER.info(
         "Bot started as %s! Username is %s and ID is %s",
@@ -40,7 +42,7 @@ async def run() -> None:
         BOT_INFO["username"],
         BOT_INFO["id"],
     )
-    load_modules(ALL_MODULES, __package__)
+    load_modules(ALL_MODULES, __package__ or "ebook_converter_bot")
     # Check if the bot is restarting
     if Path("restart.json").exists():
         restart_message = json.loads(Path("restart.json").read_text())
