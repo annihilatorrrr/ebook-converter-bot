@@ -4,7 +4,28 @@ python = '3.14.3'
 "aqua:evilmartians/lefthook" = "2"
 
 [tasks.default]
+description = 'Run the bot'
 run = 'uv run -m ebook_converter_bot'
 
 [tasks.dev]
+description = 'Run the bot with live reload (jurigged)'
 run = 'uv run jurigged -v -m ebook_converter_bot'
+
+[tasks.i18n_generate_messages]
+description = 'Generate gettext messages template (.pot) from modules'
+run = 'find "ebook_converter_bot/modules/" -iname "*.py" | xargs xgettext -L Python -c -o ebook_converter_bot/data/locales/ebook_converter_bot.pot'
+
+[tasks.i18n_init_lang]
+description = 'Initialize a new locale .po file from the .pot template'
+usage = '''
+arg "<lang>" help="Language code (e.g. ar, en, tr)"
+'''
+run = 'mkdir -p ebook_converter_bot/data/locales/${usage_lang}/LC_MESSAGES/ && cp ebook_converter_bot/data/locales/ebook_converter_bot.pot ebook_converter_bot/data/locales/${usage_lang}/LC_MESSAGES/ebook_converter_bot.po'
+
+[tasks.i18n_merge]
+description = 'Merge updated .pot into all existing .po files'
+run = 'find ebook_converter_bot/data/locales -name "*.po" -print0 | xargs -0 -I {} msgmerge --update {} ebook_converter_bot/data/locales/ebook_converter_bot.pot'
+
+[tasks.i18n_compile]
+description = 'Compile all .po files into .mo files'
+run = "find ebook_converter_bot/data/locales -name '*.po' -print0 | xargs -0 -I {} sh -c 'msgfmt -o \"${1%.po}.mo\" \"$1\"' sh {}"
