@@ -11,6 +11,10 @@ run = 'uv run -m ebook_converter_bot'
 description = 'Run the bot with live reload (jurigged)'
 run = 'uv run jurigged -v -m ebook_converter_bot'
 
+[tasks.test]
+description = 'Run tests'
+run = 'uv run --group dev -m pytest'
+
 [tasks.i18n_generate_messages]
 description = 'Generate gettext messages template (.pot) from modules'
 run = 'find "ebook_converter_bot/modules/" -iname "*.py" | xargs xgettext -L Python -c -o ebook_converter_bot/data/locales/ebook_converter_bot.pot'
