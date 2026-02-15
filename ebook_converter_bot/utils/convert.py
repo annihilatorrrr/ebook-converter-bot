@@ -14,6 +14,7 @@ from ebook_converter_bot.utils.epub import (
     flatten_toc,
     set_epub_to_rtl,
 )
+from ebook_converter_bot.utils.pdf import pdf_to_htmlz
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,7 @@ class Converter:
         "txt",
         "txtz",
         "bok",
+        "pdf",
     ]
     supported_output_types: ClassVar[list[str]] = [
         "azw3",
@@ -179,7 +181,9 @@ class Converter:
         set_to_rtl: bool | None = None
 
         try:
-            await asyncio.wait_for(asyncio.to_thread(bok_to_epub, input_file, epub_file), timeout=600)
+            await asyncio.wait_for(
+                asyncio.to_thread(bok_to_epub, input_file, epub_file), timeout=600
+            )
         except Exception as e:  # noqa: BLE001
             return output_file, set_to_rtl, str(e)
 
@@ -224,13 +228,13 @@ class Converter:
         *,
         force_rtl: bool,
     ) -> tuple[Path, bool | None, str]:
-        output_file: Path = input_file.with_suffix(f'.{output_type}')
+        output_file: Path = input_file.with_suffix(f".{output_type}")
         _, conversion_error = await self._convert_from_kfx_to_epub(input_file)
-        if output_type == 'epub':
+        if output_type == "epub":
             set_to_rtl: bool | None = set_epub_to_rtl(output_file) if force_rtl else None
             return output_file, set_to_rtl, conversion_error
 
-        epub_file: Path = input_file.with_suffix('.epub')
+        epub_file: Path = input_file.with_suffix(".epub")
         set_to_rtl: bool | None = set_epub_to_rtl(epub_file) if force_rtl else None
         await self._run_command(
             self._convert_command.safe_substitute(input_file=epub_file, output_file=output_file)
@@ -247,19 +251,21 @@ class Converter:
         fix_epub: bool,
         flat_toc: bool,
     ) -> tuple[Path, bool | None, str]:
-        conversion_error = ''
+        conversion_error = ""
         input_type: str = input_file.suffix.lower()[1:]
-        output_file: Path = input_file.with_suffix(f'.{output_type}')
+        output_file: Path = input_file.with_suffix(f".{output_type}")
 
-        if input_type == 'epub':
-            set_to_rtl = self._preprocess_input_epub(input_file, force_rtl=force_rtl, fix_epub=fix_epub, flat_toc=flat_toc)
+        if input_type == "epub":
+            set_to_rtl = self._preprocess_input_epub(
+                input_file, force_rtl=force_rtl, fix_epub=fix_epub, flat_toc=flat_toc
+            )
         else:
             set_to_rtl = None
 
         if input_type in self.kfx_input_allowed_types:
             return await self._convert_from_kfx_input(input_file, output_type, force_rtl=force_rtl)
 
-        if output_type == 'kfx':
+        if output_type == "kfx":
             if input_type not in self.kfx_output_allowed_types:
                 return output_file, set_to_rtl, conversion_error
             _, conversion_error = await self._convert_to_kfx(input_file)
@@ -269,15 +275,52 @@ class Converter:
             if input_type == output_type:
                 return output_file, set_to_rtl, conversion_error
 
-            command = self._convert_command.safe_substitute(input_file=input_file, output_file=output_file)
-            if output_type == 'docx':
-                command += ' --filter-css margin-left,margin-right'
+            command = self._convert_command.safe_substitute(
+                input_file=input_file, output_file=output_file
+            )
+            if output_type == "docx":
+                command += " --filter-css margin-left,margin-right"
             _, conversion_error = await self._run_command(command)
 
-            if output_type == 'epub' and force_rtl:
+            if output_type == "epub" and force_rtl:
                 set_to_rtl = set_epub_to_rtl(output_file)
 
         return output_file, set_to_rtl, conversion_error
+
+    async def _convert_from_pdf(
+        self,
+        input_file: Path,
+        output_type: str,
+        *,
+        force_rtl: bool,
+    ) -> tuple[Path, bool | None, str]:
+        if output_type == "pdf":
+            return input_file, None, ""
+
+        htmlz_file = input_file.with_suffix(".htmlz")
+        err = pdf_to_htmlz(input_file, htmlz_file)
+        if err:
+            htmlz_file.unlink(missing_ok=True)
+            return input_file.with_suffix(f".{output_type}"), None, err
+
+        try:
+            if output_type == "kfx":
+                epub_file, set_to_rtl, conversion_error = await self._convert_non_bok(
+                    htmlz_file, "epub", force_rtl=force_rtl, fix_epub=False, flat_toc=False
+                )
+                if conversion_error:
+                    epub_file.unlink(missing_ok=True)
+                    return input_file.with_suffix(".kfx"), set_to_rtl, conversion_error
+
+                _, conversion_error = await self._convert_to_kfx(epub_file)
+                epub_file.unlink(missing_ok=True)
+                return input_file.with_suffix(".kfx"), set_to_rtl, conversion_error
+
+            return await self._convert_non_bok(
+                htmlz_file, output_type, force_rtl=force_rtl, fix_epub=False, flat_toc=False
+            )
+        finally:
+            htmlz_file.unlink(missing_ok=True)
 
     async def convert_ebook(
         self,
@@ -290,4 +333,8 @@ class Converter:
         input_type: str = input_file.suffix.lower()[1:]
         if input_type == "bok":
             return await self._convert_from_bok(input_file, output_type, force_rtl=force_rtl)
-        return await self._convert_non_bok(input_file, output_type, force_rtl=force_rtl, fix_epub=fix_epub, flat_toc=flat_toc)
+        if input_type == "pdf":
+            return await self._convert_from_pdf(input_file, output_type, force_rtl=force_rtl)
+        return await self._convert_non_bok(
+            input_file, output_type, force_rtl=force_rtl, fix_epub=fix_epub, flat_toc=flat_toc
+        )

@@ -12,7 +12,7 @@
 [![Liberapay](https://img.shields.io/badge/Liberapay-Support-F6C915?style=flat&labelColor=F6C915&logo=Liberapay&logoColor=white&link=https://liberapay.com/yshalsager)](https://liberapay.com/yshalsager)
 
 A bot that converts e-books to various formats, powered by [calibre](https://calibre-ebook.com/)!
-It currently supports 36 input formats and 20 output formats.
+It currently supports 37 input formats and 20 output formats.
 
 You can start using it or adding it to your group [here on Telegram](https://t.me/ebook_converter_bot).
 
@@ -32,7 +32,7 @@ It supports converting from the following formats:
 ```python
 ['azw', 'azw3', 'azw4', 'azw8', 'bok', 'cb7', 'cbc', 'cbr', 'cbz', 'chm', 'djvu',
  'doc', 'docx', 'epub', 'fb2', 'fbz', 'html', 'htmlz', 'kfx', 'kfx-zip', 'kpf',
- 'lit', 'lrf', 'md', 'mobi', 'odt', 'opf', 'pdb', 'pml', 'prc', 'rb', 'rtf',
+ 'lit', 'lrf', 'md', 'mobi', 'odt', 'opf', 'pdb', 'pdf', 'pml', 'prc', 'rb', 'rtf',
  'snb', 'tcr', 'txt', 'txtz']
 ```
 
@@ -163,4 +163,4 @@ For local debugging, there's also a small CLI wrapper:
 
 ```bash
 uv run scripts/bok_to_epub.py path/to/book.bok
-```w
+```
