@@ -97,7 +97,9 @@ class Converter:
     def get_supported_types(cls) -> list[str]:
         return sorted(set(cls.supported_input_types + cls.supported_output_types))
 
-    def is_supported_input_type(self, input_file: str) -> bool:
+    def is_supported_input_type(self, input_file: str | None) -> bool:
+        if not input_file:
+            return False
         return input_file.lower().split(".")[-1] in self.supported_input_types
 
     @staticmethod

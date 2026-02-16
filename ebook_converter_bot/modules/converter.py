@@ -34,7 +34,8 @@ async def file_converter(event: events.NewMessage.Event) -> None:
         file = event.message.file
     if not file:
         return
-    if not converter.is_supported_input_type(file.name):
+    file_name = file.name or ""
+    if not converter.is_supported_input_type(file_name):
         # Unsupported file
         await event.reply(_("The file you sent is not a supported type!", lang))
         return
@@ -72,7 +73,7 @@ async def file_converter(event: events.NewMessage.Event) -> None:
     ]
     buttons = [buttons[i::5] for i in range(5)]
     buttons.append([Button.inline(_("Force RTL", lang) + " ❓", data="rtl_disabled")])
-    if file.name.lower().endswith(".epub"):
+    if file_name.lower().endswith(".epub"):
         buttons.extend(
             [
                 [Button.inline(_("Fix EPUB before converting", lang) + " ❓", data="epub_keep")],
@@ -134,7 +135,7 @@ async def epub_toc_edit_enable_callback(event: events.CallbackQuery.Event) -> No
         )
     elif event.data == b"epub_flat_toc":
         epub_button_row[0] = Button.inline(
-            _("Flatten EPUB TOC", lang) + " ❌", data="epub_flat_toc"
+            _("Flatten EPUB TOC", lang) + " ❌", data="epub_keep_toc"
         )
     message.buttons[-1] = epub_button_row
     await message.edit(message.text, buttons=message.buttons)
@@ -161,12 +162,12 @@ async def converter_callback(
     output_type: str
     random_id: str
     output_type, random_id = event.data.decode().split("|")
-    if not queue.get(random_id):
+    input_file_path = queue.pop(random_id, None)
+    if not input_file_path:
         return None
-    input_file = Path(queue[random_id])
+    input_file = Path(input_file_path)
     if not input_file.exists():
         return None
-    del queue[random_id]
     reply = await event.edit(_("Converting the file to {}...", lang).format(output_type))
     output_file, converted_to_rtl, conversion_error = await converter.convert_ebook(
         input_file,
@@ -194,5 +195,5 @@ async def converter_callback(
     input_file.unlink(missing_ok=True)
     output_file.unlink(missing_ok=True)
     if converted:
-        return input_file.suffix, output_type
+        return input_file.suffix.removeprefix("."), output_type
     return None
