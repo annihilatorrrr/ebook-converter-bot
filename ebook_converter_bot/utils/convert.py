@@ -2,6 +2,7 @@ import asyncio
 import logging
 import re
 from asyncio.subprocess import PIPE, STDOUT, Process
+from dataclasses import dataclass, replace
 from os import getpgid, killpg, setsid
 from pathlib import Path
 from signal import SIGKILL
@@ -16,6 +17,26 @@ from ebook_converter_bot.utils.epub import (
 from ebook_converter_bot.utils.pdf import pdf_to_htmlz
 
 logger = logging.getLogger(__name__)
+
+TASK_TIMEOUT = 600  # 10 min
+
+
+@dataclass
+class ConversionOptions:
+    force_rtl: bool = False
+    fix_epub: bool = False
+    flat_toc: bool = False
+    smarten_punctuation: bool = False
+    change_justification: str = "original"
+    remove_paragraph_spacing: bool = False
+    kfx_doc_type: str = "doc"
+    kfx_pages: int | None = None
+    docx_page_size: str = "default"
+    docx_no_toc: bool = False
+    epub_version: str = "default"
+    epub_inline_toc: bool = False
+    pdf_paper_size: str = "default"
+    pdf_page_numbers: bool = False
 
 
 class Converter:
@@ -113,9 +134,7 @@ class Converter:
             preexec_fn=setsid,
         )
         try:
-            stdout, _ = await asyncio.wait_for(
-                process.communicate(), timeout=600
-            )  # wait for 10 minutes
+            stdout, _ = await asyncio.wait_for(process.communicate(), timeout=TASK_TIMEOUT)
             output = "\n".join(
                 [
                     i
@@ -141,26 +160,72 @@ class Converter:
             pass  # Ignore 'no such process' error
         return process.returncode, conversion_error
 
-    async def _convert_to_kfx(self, input_file: Path) -> tuple[int | None, str]:
-        """Convert an ebook to KFX
-        :param input_file: Pathname of the .epub, .opf, .mobi, .doc, .docx, .kpf, or .kfx-zip file to be converted
-        :return:
-        """
-        return await self._run_command(["calibre-debug", "-r", "KFX Output", "--", str(input_file)])
+    @staticmethod
+    def _append_common_options(command: list[str], options: ConversionOptions) -> None:
+        if options.smarten_punctuation:
+            command.append("--smarten-punctuation")
+        if options.remove_paragraph_spacing:
+            command.append("--remove-paragraph-spacing")
+        if options.change_justification != "original":
+            command.extend(["--change-justification", options.change_justification])
+
+    @staticmethod
+    def _append_docx_options(command: list[str], options: ConversionOptions) -> None:
+        command.extend(["--filter-css", "float"])
+        if options.docx_page_size != "default":
+            command.extend(["--docx-page-size", options.docx_page_size])
+        if options.docx_no_toc:
+            command.append("--docx-no-toc")
+
+    @staticmethod
+    def _append_epub_options(command: list[str], options: ConversionOptions) -> None:
+        if options.epub_version != "default":
+            command.extend(["--epub-version", options.epub_version])
+        if options.epub_inline_toc:
+            command.append("--epub-inline-toc")
+
+    @staticmethod
+    def _append_pdf_options(command: list[str], options: ConversionOptions) -> None:
+        if options.pdf_paper_size != "default":
+            command.extend(["--paper-size", options.pdf_paper_size])
+        if options.pdf_page_numbers:
+            command.append("--pdf-page-numbers")
+
+    def _append_ebook_convert_options(
+        self,
+        command: list[str],
+        output_type: str,
+        options: ConversionOptions,
+    ) -> None:
+        self._append_common_options(command, options)
+        if output_type == "docx":
+            self._append_docx_options(command, options)
+        elif output_type == "epub":
+            self._append_epub_options(command, options)
+        elif output_type == "pdf":
+            self._append_pdf_options(command, options)
+
+    async def _convert_to_kfx(
+        self,
+        input_file: Path,
+        options: ConversionOptions,
+    ) -> tuple[int | None, str]:
+        command = ["calibre-debug", "-r", "KFX Output", "--"]
+        if options.kfx_doc_type == "book":
+            command.append("--book")
+        if options.kfx_pages is not None:
+            command.extend(["--pages", str(options.kfx_pages)])
+        command.append(str(input_file))
+        return await self._run_command(command)
 
     async def _convert_from_kfx_to_epub(self, input_file: Path) -> tuple[int | None, str]:
-        """Convert a KFX ebook to EPUB
-        :param input_file: Pathname of the .azw8, .kfx, .kfx-zip, or .kpf file to be processed
-        :return:
-        """
         return await self._run_command(["calibre-debug", "-r", "KFX Input", "--", str(input_file)])
 
     async def _convert_from_bok(
         self,
         input_file: Path,
         output_type: str,
-        *,
-        force_rtl: bool,
+        options: ConversionOptions,
     ) -> tuple[Path, bool | None, str]:
         epub_file = input_file.with_suffix(".epub")
         output_file = input_file.with_suffix(f".{output_type}")
@@ -174,45 +239,34 @@ class Converter:
         except Exception as e:  # noqa: BLE001
             return output_file, set_to_rtl, str(e)
 
-        if force_rtl:
+        if options.force_rtl:
             set_to_rtl = set_epub_to_rtl(epub_file)
 
         if output_type == "epub":
             return epub_file, set_to_rtl, conversion_error
 
-        if output_type == "kepub":
-            output_file = input_file.with_suffix(".kepub")
-            _, conversion_error = await self._run_command(
-                ["ebook-convert", str(epub_file), str(output_file)]
-            )
-            epub_file.unlink(missing_ok=True)
-            return output_file, set_to_rtl, conversion_error
-
         if output_type == "kfx":
-            _, conversion_error = await self._convert_to_kfx(epub_file)
+            _, conversion_error = await self._convert_to_kfx(epub_file, options)
             epub_file.unlink(missing_ok=True)
             return input_file.with_suffix(".kfx"), set_to_rtl, conversion_error
 
-        _, conversion_error = await self._run_command(
-            ["ebook-convert", str(epub_file), str(output_file)]
-        )
+        if output_type == "kepub":
+            output_file = input_file.with_suffix(".kepub")
+
+        command = ["ebook-convert", str(epub_file), str(output_file)]
+        self._append_ebook_convert_options(command, output_type, options)
+        _, conversion_error = await self._run_command(command)
         epub_file.unlink(missing_ok=True)
         return output_file, set_to_rtl, conversion_error
 
     @staticmethod
-    def _preprocess_input_epub(
-        input_file: Path,
-        *,
-        force_rtl: bool,
-        fix_epub: bool,
-        flat_toc: bool,
-    ) -> bool | None:
+    def _preprocess_input_epub(input_file: Path, options: ConversionOptions) -> bool | None:
         set_to_rtl: bool | None = None
-        if force_rtl:
-            set_to_rtl: bool = set_epub_to_rtl(input_file)
-        if fix_epub:
+        if options.force_rtl:
+            set_to_rtl = set_epub_to_rtl(input_file)
+        if options.fix_epub:
             fix_content_opf_problems(input_file)
-        if flat_toc:
+        if options.flat_toc:
             flatten_toc(input_file)
         return set_to_rtl
 
@@ -220,20 +274,21 @@ class Converter:
         self,
         input_file: Path,
         output_type: str,
-        *,
-        force_rtl: bool,
+        options: ConversionOptions,
     ) -> tuple[Path, bool | None, str]:
-        output_file: Path = input_file.with_suffix(
+        output_file = input_file.with_suffix(
             ".kepub" if output_type == "kepub" else f".{output_type}"
         )
         _, conversion_error = await self._convert_from_kfx_to_epub(input_file)
         if output_type == "epub":
-            set_to_rtl: bool | None = set_epub_to_rtl(output_file) if force_rtl else None
+            set_to_rtl = set_epub_to_rtl(output_file) if options.force_rtl else None
             return output_file, set_to_rtl, conversion_error
 
-        epub_file: Path = input_file.with_suffix(".epub")
-        set_to_rtl: bool | None = set_epub_to_rtl(epub_file) if force_rtl else None
-        await self._run_command(["ebook-convert", str(epub_file), str(output_file)])
+        epub_file = input_file.with_suffix(".epub")
+        set_to_rtl = set_epub_to_rtl(epub_file) if options.force_rtl else None
+        command = ["ebook-convert", str(epub_file), str(output_file)]
+        self._append_ebook_convert_options(command, output_type, options)
+        await self._run_command(command)
         epub_file.unlink(missing_ok=True)
         return output_file, set_to_rtl, conversion_error
 
@@ -241,48 +296,37 @@ class Converter:
         self,
         input_file: Path,
         output_type: str,
-        *,
-        force_rtl: bool,
-        fix_epub: bool,
-        flat_toc: bool,
+        options: ConversionOptions,
     ) -> tuple[Path, bool | None, str]:
         conversion_error = ""
-        input_type: str = input_file.suffix.lower()[1:]
-        output_file: Path = input_file.with_suffix(f".{output_type}")
+        input_type = input_file.suffix.lower()[1:]
+        output_file = input_file.with_suffix(f".{output_type}")
 
-        if input_type == "epub":
-            set_to_rtl = self._preprocess_input_epub(
-                input_file, force_rtl=force_rtl, fix_epub=fix_epub, flat_toc=flat_toc
-            )
-        else:
-            set_to_rtl = None
+        set_to_rtl = (
+            self._preprocess_input_epub(input_file, options) if input_type == "epub" else None
+        )
 
         if input_type in self.kfx_input_allowed_types:
-            return await self._convert_from_kfx_input(input_file, output_type, force_rtl=force_rtl)
+            return await self._convert_from_kfx_input(input_file, output_type, options)
 
         if output_type == "kfx":
             if input_type not in self.kfx_output_allowed_types:
                 return output_file, set_to_rtl, conversion_error
-            _, conversion_error = await self._convert_to_kfx(input_file)
+            _, conversion_error = await self._convert_to_kfx(input_file, options)
             return output_file, set_to_rtl, conversion_error
 
-        if output_type in self.supported_output_types:
-            if input_type == output_type:
-                return output_file, set_to_rtl, conversion_error
+        if output_type not in self.supported_output_types or input_type == output_type:
+            return output_file, set_to_rtl, conversion_error
 
-            if output_type == "kepub":
-                output_file = input_file.with_suffix(".kepub")
-                command = ["ebook-convert", str(input_file), str(output_file)]
-                _, conversion_error = await self._run_command(command)
-                return output_file, set_to_rtl, conversion_error
+        if output_type == "kepub":
+            output_file = input_file.with_suffix(".kepub")
 
-            command = ["ebook-convert", str(input_file), str(output_file)]
-            if output_type == "docx":
-                command.extend(["--filter-css", "float"])
-            _, conversion_error = await self._run_command(command)
+        command = ["ebook-convert", str(input_file), str(output_file)]
+        self._append_ebook_convert_options(command, output_type, options)
+        _, conversion_error = await self._run_command(command)
 
-            if output_type == "epub" and force_rtl:
-                set_to_rtl = set_epub_to_rtl(output_file)
+        if output_type == "epub" and options.force_rtl:
+            set_to_rtl = set_epub_to_rtl(output_file)
 
         return output_file, set_to_rtl, conversion_error
 
@@ -290,8 +334,7 @@ class Converter:
         self,
         input_file: Path,
         output_type: str,
-        *,
-        force_rtl: bool,
+        options: ConversionOptions,
     ) -> tuple[Path, bool | None, str]:
         if output_type == "pdf":
             return input_file, None, ""
@@ -304,20 +347,30 @@ class Converter:
 
         try:
             if output_type == "kfx":
+                epub_options = replace(
+                    options,
+                    smarten_punctuation=False,
+                    change_justification="original",
+                    remove_paragraph_spacing=False,
+                    docx_page_size="default",
+                    docx_no_toc=False,
+                    epub_version="default",
+                    epub_inline_toc=False,
+                    pdf_paper_size="default",
+                    pdf_page_numbers=False,
+                )
                 epub_file, set_to_rtl, conversion_error = await self._convert_non_bok(
-                    htmlz_file, "epub", force_rtl=force_rtl, fix_epub=False, flat_toc=False
+                    htmlz_file, "epub", epub_options
                 )
                 if conversion_error:
                     epub_file.unlink(missing_ok=True)
                     return input_file.with_suffix(".kfx"), set_to_rtl, conversion_error
 
-                _, conversion_error = await self._convert_to_kfx(epub_file)
+                _, conversion_error = await self._convert_to_kfx(epub_file, options)
                 epub_file.unlink(missing_ok=True)
                 return input_file.with_suffix(".kfx"), set_to_rtl, conversion_error
 
-            return await self._convert_non_bok(
-                htmlz_file, output_type, force_rtl=force_rtl, fix_epub=False, flat_toc=False
-            )
+            return await self._convert_non_bok(htmlz_file, output_type, options)
         finally:
             htmlz_file.unlink(missing_ok=True)
 
@@ -325,15 +378,12 @@ class Converter:
         self,
         input_file: Path,
         output_type: str,
-        force_rtl: bool = False,
-        fix_epub: bool = False,
-        flat_toc: bool = False,
+        options: ConversionOptions | None = None,
     ) -> tuple[Path, bool | None, str]:
-        input_type: str = input_file.suffix.lower()[1:]
+        options = options or ConversionOptions()
+        input_type = input_file.suffix.lower()[1:]
         if input_type == "bok":
-            return await self._convert_from_bok(input_file, output_type, force_rtl=force_rtl)
+            return await self._convert_from_bok(input_file, output_type, options)
         if input_type == "pdf":
-            return await self._convert_from_pdf(input_file, output_type, force_rtl=force_rtl)
-        return await self._convert_non_bok(
-            input_file, output_type, force_rtl=force_rtl, fix_epub=fix_epub, flat_toc=flat_toc
-        )
+            return await self._convert_from_pdf(input_file, output_type, options)
+        return await self._convert_non_bok(input_file, output_type, options)

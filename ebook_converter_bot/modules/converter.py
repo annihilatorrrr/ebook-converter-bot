@@ -12,8 +12,9 @@ from telethon import Button, events
 from ebook_converter_bot.bot import BOT
 from ebook_converter_bot.db.curd import get_lang
 from ebook_converter_bot.utils.analytics import analysis
-from ebook_converter_bot.utils.convert import Converter
+from ebook_converter_bot.utils.convert import ConversionOptions, Converter
 from ebook_converter_bot.utils.converter_options import (
+    CONTEXT_TYPES,
     ConversionRequestState,
     build_options_keyboard,
     cleanup_expired_requests,
@@ -25,6 +26,11 @@ from ebook_converter_bot.utils.telegram import tg_exceptions_handler
 
 MAX_ALLOWED_FILE_SIZE = 26214400  # 25 MB
 QUEUE_TTL_SECONDS = 1800  # 30 minutes
+CB_VIEW = "view"
+CB_OPT = "opt"
+CB_CTX = "ctx"
+CB_FMT = "fmt"
+CB_CANCEL = "cancel"
 
 converter = Converter()
 if "converter_queue" not in BOT.__dict__:
@@ -49,6 +55,79 @@ async def cleanup_queue_loop() -> None:
 queue_cleanup_task = BOT.loop.create_task(cleanup_queue_loop())
 
 
+def options_labels(lang: str) -> dict[str, str]:
+    return {
+        "force_rtl_label": _("Force RTL", lang),
+        "fix_epub_label": _("Fix EPUB before converting", lang),
+        "flat_toc_label": _("Flatten EPUB TOC", lang),
+        "smarten_punctuation_label": _("Smarten punctuation", lang),
+        "change_justification_label": _("Text justification", lang),
+        "remove_paragraph_spacing_label": _("Remove paragraph spacing", lang),
+        "original_label": _("Original", lang),
+        "left_label": _("Left", lang),
+        "justify_label": _("Justify", lang),
+        "docx_page_size_label": _("DOCX page size", lang),
+        "docx_no_toc_label": _("DOCX: disable generated TOC", lang),
+        "epub_version_label": _("EPUB version", lang),
+        "epub_inline_toc_label": _("EPUB: inline TOC", lang),
+        "pdf_paper_size_label": _("PDF paper size", lang),
+        "pdf_page_numbers_label": _("PDF: page numbers", lang),
+        "kfx_doc_type_label": _("KFX doc type", lang),
+        "kfx_pages_label": _("KFX pages", lang),
+        "default_label": _("Default", lang),
+        "letter_label": _("Letter", lang),
+        "a4_label": _("A4", lang),
+        "none_label": _("None", lang),
+        "auto_label": _("Auto", lang),
+        "pdoc_label": "PDOC",
+        "ebok_label": "EBOK",
+        "back_to_formats_label": _("Back to formats", lang),
+        "cancel_label": _("Cancel", lang),
+    }
+
+
+def render_options_summary(state: ConversionRequestState, lang: str) -> str:
+    summary_parts = [
+        text
+        for enabled, text in (
+            (state.force_rtl, _("Force RTL", lang)),
+            (state.smarten_punctuation, _("Smarten punctuation", lang)),
+            (state.remove_paragraph_spacing, _("Remove paragraph spacing", lang)),
+            (
+                state.change_justification != "original",
+                _("Text justification: {}", lang).format(state.change_justification),
+            ),
+            (
+                state.input_ext == "epub" and state.fix_epub,
+                _("Fix EPUB before converting", lang),
+            ),
+            (
+                state.input_ext == "epub" and state.flat_toc,
+                _("Flatten EPUB TOC", lang),
+            ),
+            (
+                state.docx_page_size != "default",
+                _("DOCX page size: {}", lang).format(state.docx_page_size.upper()),
+            ),
+            (state.docx_no_toc, _("DOCX: disable generated TOC", lang)),
+            (
+                state.epub_version != "default",
+                _("EPUB version: {}", lang).format(state.epub_version),
+            ),
+            (state.epub_inline_toc, _("EPUB: inline TOC", lang)),
+            (
+                state.pdf_paper_size != "default",
+                _("PDF paper size: {}", lang).format(state.pdf_paper_size.upper()),
+            ),
+            (state.pdf_page_numbers, _("PDF: page numbers", lang)),
+            (state.kfx_doc_type == "book", _("KFX doc type: EBOK", lang)),
+            (state.kfx_pages == 0, _("KFX pages: Auto", lang)),
+        )
+        if enabled
+    ]
+    return "\n".join(summary_parts)
+
+
 def render_screen(
     request_id: str,
     state: ConversionRequestState,
@@ -56,29 +135,15 @@ def render_screen(
     *,
     show_options: bool = False,
 ) -> tuple[str, list[list]]:
-    summary_parts: list[str] = []
-    if state.force_rtl:
-        summary_parts.append(_("Force RTL", lang))
-    if state.input_ext == "epub" and state.fix_epub:
-        summary_parts.append(_("Fix EPUB before converting", lang))
-    if state.input_ext == "epub" and state.flat_toc:
-        summary_parts.append(_("Flatten EPUB TOC", lang))
-    summary = "\n".join(summary_parts)
+    summary = render_options_summary(state, lang)
+    labels = options_labels(lang)
     if show_options:
         message_text = (
             f"{_('Conversion options:', lang)}\n\n{summary}"
             if summary
             else _("Conversion options:", lang)
         )
-        buttons = build_options_keyboard(
-            request_id,
-            state,
-            force_rtl_label=_("Force RTL", lang),
-            fix_epub_label=_("Fix EPUB before converting", lang),
-            flat_toc_label=_("Flatten EPUB TOC", lang),
-            back_to_formats_label=_("Back to formats", lang),
-            cancel_label=_("Cancel", lang),
-        )
+        buttons = build_options_keyboard(request_id, state, labels)
         return message_text, buttons
     message_text = (
         f"{_('Select the format you want to convert to:', lang)}\n\n{summary}"
@@ -88,8 +153,8 @@ def render_screen(
     buttons = format_button_rows(request_id, converter.supported_output_types, per_row=3)
     buttons.append(
         [
-            Button.inline(_("Options ⚙️", lang), data=f"view|opts|{request_id}"),
-            Button.inline(_("Cancel", lang), data=f"cancel|{request_id}"),
+            Button.inline(_("Options ⚙️", lang), data=f"{CB_VIEW}|opts|{request_id}"),
+            Button.inline(_("Cancel", lang), data=f"{CB_CANCEL}|{request_id}"),
         ]
     )
     return message_text, buttons
@@ -168,7 +233,7 @@ async def file_converter(event: events.NewMessage.Event) -> None:
     await reply.edit(message_text, buttons=buttons)
 
 
-@BOT.on(events.CallbackQuery(pattern=r"view\|(opts|formats)\|\d+"))
+@BOT.on(events.CallbackQuery(pattern=rf"{CB_VIEW}\|(opts|formats)\|\d+"))
 @tg_exceptions_handler
 async def view_switch_callback(event: events.CallbackQuery.Event) -> None:
     _view, view_name, request_id = event.data.decode().split("|")
@@ -184,22 +249,37 @@ async def view_switch_callback(event: events.CallbackQuery.Event) -> None:
     await event.edit(message_text, buttons=buttons)
 
 
-@BOT.on(events.CallbackQuery(pattern=r"opt\|(rtl|fix_epub|flat_toc)\|[01]\|\d+"))
+@BOT.on(events.CallbackQuery(pattern=rf"{CB_CTX}\|(docx|epub|pdf|kfx)\|\d+"))
+@tg_exceptions_handler
+async def options_context_callback(event: events.CallbackQuery.Event) -> None:
+    _ctx, context_name, request_id = event.data.decode().split("|")
+    state = await get_request_state(event, request_id)
+    if not state:
+        return
+    if context_name not in CONTEXT_TYPES:
+        return
+    state.options_context = context_name
+    lang = get_lang(event.chat_id)
+    message_text, buttons = render_screen(request_id, state, lang, show_options=True)
+    await event.edit(message_text, buttons=buttons)
+
+
+@BOT.on(events.CallbackQuery(pattern=rf"{CB_OPT}\|[^|]+\|[^|]+\|\d+"))
 @tg_exceptions_handler
 async def options_toggle_callback(event: events.CallbackQuery.Event) -> None:
-    _opt, option_key, enabled_flag, request_id = event.data.decode().split("|")
+    _opt, option_key, option_value, request_id = event.data.decode().split("|")
     lang = get_lang(event.chat_id)
     state = await get_request_state(event, request_id)
     if not state:
         return
-    if not set_request_option(state, option_key, enabled_flag == "1"):
-        await event.answer(_("This option is available only for EPUB input.", lang), alert=True)
+    if not set_request_option(state, option_key, option_value):
+        await event.answer(_("This option is not available in this context.", lang), alert=True)
         return
     message_text, buttons = render_screen(request_id, state, lang, show_options=True)
     await event.edit(message_text, buttons=buttons)
 
 
-@BOT.on(events.CallbackQuery(pattern=r"cancel\|\d+"))
+@BOT.on(events.CallbackQuery(pattern=rf"{CB_CANCEL}\|\d+"))
 @tg_exceptions_handler
 async def cancel_conversion_callback(event: events.CallbackQuery.Event) -> None:
     _cancel, request_id = event.data.decode().split("|")
@@ -215,7 +295,7 @@ async def cancel_conversion_callback(event: events.CallbackQuery.Event) -> None:
     await event.edit(_("Conversion request canceled.", lang))
 
 
-@BOT.on(events.CallbackQuery(pattern=r"fmt\|[\w-]+\|\d+"))
+@BOT.on(events.CallbackQuery(pattern=rf"{CB_FMT}\|[\w-]+\|\d+"))
 @tg_exceptions_handler
 @analysis
 async def converter_callback(
@@ -230,12 +310,26 @@ async def converter_callback(
         return None
     reply = await event.edit(_("Converting the file to {}...", lang).format(output_type))
     input_file = Path(state.input_file_path)
-    output_file, converted_to_rtl, conversion_error = await converter.convert_ebook(
-        input_file,
-        output_type,
+    options = ConversionOptions(
         force_rtl=state.force_rtl,
         fix_epub=state.fix_epub if state.input_ext == "epub" else False,
         flat_toc=state.flat_toc if state.input_ext == "epub" else False,
+        smarten_punctuation=state.smarten_punctuation,
+        change_justification=state.change_justification,
+        remove_paragraph_spacing=state.remove_paragraph_spacing,
+        kfx_doc_type=state.kfx_doc_type,
+        kfx_pages=state.kfx_pages,
+        docx_page_size=state.docx_page_size,
+        docx_no_toc=state.docx_no_toc,
+        epub_version=state.epub_version,
+        epub_inline_toc=state.epub_inline_toc,
+        pdf_paper_size=state.pdf_paper_size,
+        pdf_page_numbers=state.pdf_page_numbers,
+    )
+    output_file, converted_to_rtl, conversion_error = await converter.convert_ebook(
+        input_file,
+        output_type,
+        options=options,
     )
     if output_file.exists():
         message_text = ""

@@ -6,6 +6,91 @@ from telethon import Button
 from telethon.tl.types import KeyboardButtonCallback
 
 HIGHLIGHTED_FORMATS: set[str] = {"azw3", "docx", "epub", "kfx", "mobi", "pdf"}
+CONTEXT_TYPES: tuple[str, ...] = ("docx", "epub", "pdf", "kfx")
+GLOBAL_BOOL_OPTIONS: tuple[tuple[str, str], ...] = (
+    ("rtl", "force_rtl_label"),
+    ("smarten", "smarten_punctuation_label"),
+    ("remove_paragraph_spacing", "remove_paragraph_spacing_label"),
+)
+GLOBAL_VALUE_OPTIONS: tuple[tuple[str, str, tuple[tuple[str, str], ...]], ...] = (
+    (
+        "change_justification",
+        "change_justification_label",
+        (("original", "original_label"), ("left", "left_label"), ("justify", "justify_label")),
+    ),
+)
+CONTEXT_VALUE_OPTIONS: dict[str, tuple[tuple[str, str, tuple[tuple[str, str], ...]], ...]] = {
+    "docx": (
+        (
+            "docx_page_size",
+            "docx_page_size_label",
+            (("default", "default_label"), ("letter", "letter_label"), ("a4", "a4_label")),
+        ),
+    ),
+    "epub": (
+        (
+            "epub_version",
+            "epub_version_label",
+            (("default", "default_label"), ("2", "2"), ("3", "3")),
+        ),
+    ),
+    "pdf": (
+        (
+            "pdf_paper_size",
+            "pdf_paper_size_label",
+            (("default", "default_label"), ("letter", "letter_label"), ("a4", "a4_label")),
+        ),
+    ),
+    "kfx": (
+        (
+            "kfx_doc_type",
+            "kfx_doc_type_label",
+            (("doc", "pdoc_label"), ("book", "ebok_label")),
+        ),
+        (
+            "kfx_pages",
+            "kfx_pages_label",
+            (("none", "none_label"), ("auto", "auto_label")),
+        ),
+    ),
+}
+CONTEXT_BOOL_OPTIONS: dict[str, tuple[tuple[str, str], ...]] = {
+    "docx": (("docx_no_toc", "docx_no_toc_label"),),
+    "epub": (("epub_inline_toc", "epub_inline_toc_label"),),
+    "pdf": (("pdf_page_numbers", "pdf_page_numbers_label"),),
+    "kfx": (),
+}
+BOOL_OPTION_ATTRS: dict[str, str] = {
+    "rtl": "force_rtl",
+    "fix_epub": "fix_epub",
+    "flat_toc": "flat_toc",
+    "smarten": "smarten_punctuation",
+    "remove_paragraph_spacing": "remove_paragraph_spacing",
+    "docx_no_toc": "docx_no_toc",
+    "epub_inline_toc": "epub_inline_toc",
+    "pdf_page_numbers": "pdf_page_numbers",
+}
+EPUB_ONLY_BOOL_OPTIONS: set[str] = {"fix_epub", "flat_toc"}
+VALUE_OPTION_ATTRS: dict[str, str] = {
+    "change_justification": "change_justification",
+    "kfx_doc_type": "kfx_doc_type",
+    "kfx_pages": "kfx_pages",
+    "docx_page_size": "docx_page_size",
+    "epub_version": "epub_version",
+    "pdf_paper_size": "pdf_paper_size",
+}
+VALUE_OPTION_MAP: dict[str, dict[str, str | int | None]] = {
+    "change_justification": {"original": "original", "left": "left", "justify": "justify"},
+    "kfx_doc_type": {"doc": "doc", "book": "book"},
+    "kfx_pages": {"none": None, "auto": 0},
+    "docx_page_size": {"default": "default", "letter": "letter", "a4": "a4"},
+    "epub_version": {"default": "default", "2": "2", "3": "3"},
+    "pdf_paper_size": {"default": "default", "letter": "letter", "a4": "a4"},
+}
+EPUB_EXTRA_BOOL_OPTIONS: tuple[tuple[str, str], ...] = (
+    ("fix_epub", "fix_epub_label"),
+    ("flat_toc", "flat_toc_label"),
+)
 
 
 @dataclass
@@ -16,6 +101,18 @@ class ConversionRequestState:
     force_rtl: bool = False
     fix_epub: bool = False
     flat_toc: bool = False
+    smarten_punctuation: bool = False
+    change_justification: str = "original"
+    remove_paragraph_spacing: bool = False
+    kfx_doc_type: str = "doc"
+    kfx_pages: int | None = None
+    options_context: str = "docx"
+    docx_page_size: str = "default"
+    docx_no_toc: bool = False
+    epub_version: str = "default"
+    epub_inline_toc: bool = False
+    pdf_paper_size: str = "default"
+    pdf_page_numbers: bool = False
 
 
 def format_button_rows(
@@ -34,57 +131,85 @@ def format_button_rows(
     return [buttons[i : i + per_row] for i in range(0, len(buttons), per_row)]
 
 
-def build_options_keyboard(  # noqa: PLR0913
+def build_options_keyboard(
     request_id: str,
     state: ConversionRequestState,
-    *,
-    force_rtl_label: str,
-    fix_epub_label: str,
-    flat_toc_label: str,
-    back_to_formats_label: str,
-    cancel_label: str,
+    labels: dict[str, str],
 ) -> list[list[KeyboardButtonCallback]]:
-    rows = [
+    rows: list[list[KeyboardButtonCallback]] = [
         [
             Button.inline(
-                f"{force_rtl_label}: {'✅' if state.force_rtl else '❌'}",
-                data=f"opt|rtl|{0 if state.force_rtl else 1}|{request_id}",
+                f"{'▸ ' if context == state.options_context else ''}{context.upper()}",
+                data=f"ctx|{context}|{request_id}",
             )
+            for context in CONTEXT_TYPES
         ]
     ]
-    if state.input_ext == "epub":
-        rows.extend(
+
+    def add_bool_row(option_key: str, label_key: str) -> None:
+        selected = getattr(state, BOOL_OPTION_ATTRS[option_key])
+        rows.append(
             [
-                [
-                    Button.inline(
-                        f"{fix_epub_label}: {'✅' if state.fix_epub else '❌'}",
-                        data=f"opt|fix_epub|{0 if state.fix_epub else 1}|{request_id}",
-                    )
-                ],
-                [
-                    Button.inline(
-                        f"{flat_toc_label}: {'✅' if state.flat_toc else '❌'}",
-                        data=f"opt|flat_toc|{0 if state.flat_toc else 1}|{request_id}",
-                    )
-                ],
+                Button.inline(
+                    f"{labels[label_key]}{' ✅' if selected else ''}",
+                    data=f"opt|{option_key}|{0 if selected else 1}|{request_id}",
+                )
             ]
         )
-    rows.append([Button.inline(back_to_formats_label, data=f"view|formats|{request_id}")])
-    rows.append([Button.inline(cancel_label, data=f"cancel|{request_id}")])
+
+    def add_value_row(
+        option_key: str, prefix_label_key: str, value_specs: tuple[tuple[str, str], ...]
+    ) -> None:
+        option_attr = VALUE_OPTION_ATTRS[option_key]
+        selected_value = getattr(state, option_attr)
+        row_buttons: list[KeyboardButtonCallback] = []
+        for index, (value_token, label_key) in enumerate(value_specs):
+            label = labels.get(label_key, label_key)
+            prefix = f"{labels[prefix_label_key]}: " if index == 0 else ""
+            target_value = VALUE_OPTION_MAP[option_key][value_token]
+            row_buttons.append(
+                Button.inline(
+                    f"{prefix}{label}{' ✅' if selected_value == target_value else ''}",
+                    data=f"opt|{option_key}|{value_token}|{request_id}",
+                )
+            )
+        rows.append(row_buttons)
+
+    for option_key, label_key in GLOBAL_BOOL_OPTIONS:
+        add_bool_row(option_key, label_key)
+    for option_key, prefix_label_key, value_specs in GLOBAL_VALUE_OPTIONS:
+        add_value_row(option_key, prefix_label_key, value_specs)
+
+    for option_key, prefix_label_key, value_specs in CONTEXT_VALUE_OPTIONS[state.options_context]:
+        add_value_row(option_key, prefix_label_key, value_specs)
+    for option_key, label_key in CONTEXT_BOOL_OPTIONS[state.options_context]:
+        add_bool_row(option_key, label_key)
+
+    if state.input_ext == "epub":
+        for option_key, label_key in EPUB_EXTRA_BOOL_OPTIONS:
+            add_bool_row(option_key, label_key)
+
+    rows.append([Button.inline(labels["back_to_formats_label"], data=f"view|formats|{request_id}")])
+    rows.append([Button.inline(labels["cancel_label"], data=f"cancel|{request_id}")])
     return rows
 
 
-def set_request_option(state: ConversionRequestState, option_key: str, enabled: bool) -> bool:
-    if option_key == "rtl":
-        state.force_rtl = enabled
+def set_request_option(state: ConversionRequestState, option_key: str, option_value: str) -> bool:
+    bool_value = {"1": True, "0": False}.get(option_value)
+    if option_key in BOOL_OPTION_ATTRS:
+        if bool_value is None:
+            return False
+        if option_key in EPUB_ONLY_BOOL_OPTIONS and state.input_ext != "epub":
+            return False
+        setattr(state, BOOL_OPTION_ATTRS[option_key], bool_value)
         return True
-    if option_key == "fix_epub" and state.input_ext == "epub":
-        state.fix_epub = enabled
-        return True
-    if option_key == "flat_toc" and state.input_ext == "epub":
-        state.flat_toc = enabled
-        return True
-    return False
+    if option_key not in VALUE_OPTION_ATTRS:
+        return False
+    value_map = VALUE_OPTION_MAP[option_key]
+    if option_value not in value_map:
+        return False
+    setattr(state, VALUE_OPTION_ATTRS[option_key], value_map[option_value])
+    return True
 
 
 def cleanup_expired_requests(
