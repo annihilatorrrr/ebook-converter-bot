@@ -24,6 +24,7 @@ LABELS = {
     "docx_no_toc_label": "DOCX: disable generated TOC",
     "epub_version_label": "EPUB version",
     "epub_inline_toc_label": "EPUB: inline TOC",
+    "epub_remove_background_label": "Remove EPUB background",
     "pdf_paper_size_label": "PDF paper size",
     "pdf_page_numbers_label": "PDF: page numbers",
     "kfx_doc_type_label": "KFX doc type",
@@ -82,6 +83,10 @@ def test_options_keyboard_context_tabs_and_docx_controls() -> None:
     assert b"opt|kfx_doc_type|doc|12345678" not in data
     assert b"opt|fix_epub|1|12345678" in data
     assert b"opt|flat_toc|1|12345678" in data
+    assert [button.data for button in rows[-1]] == [
+        b"view|formats|12345678",
+        b"cancel|12345678",
+    ]
 
 
 def test_options_keyboard_shows_selected_context_controls_only() -> None:
@@ -101,6 +106,20 @@ def test_options_keyboard_shows_selected_context_controls_only() -> None:
     assert b"opt|epub_version|default|12345678" not in data
     assert b"opt|kfx_doc_type|doc|12345678" not in data
     assert b"opt|fix_epub|1|12345678" not in data
+
+
+def test_options_keyboard_epub_context_has_remove_background_toggle() -> None:
+    state = ConversionRequestState(
+        input_file_path="/tmp/book.epub",  # noqa: S108
+        queued_at=monotonic(),
+        input_ext="epub",
+        options_context="epub",
+    )
+    rows = build_options_keyboard("12345678", state, LABELS)
+    data = _flatten_data(rows)
+
+    assert b"opt|epub_inline_toc|1|12345678" in data
+    assert b"opt|epub_remove_background|1|12345678" in data
 
 
 def test_options_keyboard_kfx_pages_none_and_auto_only() -> None:
@@ -139,6 +158,8 @@ def test_set_request_option_mutates_only_selected_flag() -> None:
 
     assert set_request_option(state, "epub_version", "3") is True
     assert state.epub_version == "3"
+    assert set_request_option(state, "epub_remove_background", "1") is True
+    assert state.epub_remove_background is True
     assert state.pdf_paper_size == "default"
 
     assert set_request_option(state, "pdf_paper_size", "letter") is True

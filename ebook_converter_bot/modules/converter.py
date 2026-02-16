@@ -70,6 +70,7 @@ def options_labels(lang: str) -> dict[str, str]:
         "docx_no_toc_label": _("DOCX: disable generated TOC", lang),
         "epub_version_label": _("EPUB version", lang),
         "epub_inline_toc_label": _("EPUB: inline TOC", lang),
+        "epub_remove_background_label": _("Remove EPUB background", lang),
         "pdf_paper_size_label": _("PDF paper size", lang),
         "pdf_page_numbers_label": _("PDF: page numbers", lang),
         "kfx_doc_type_label": _("KFX doc type", lang),
@@ -116,6 +117,10 @@ def render_options_summary(state: ConversionRequestState, lang: str) -> str:
             ),
             (state.epub_inline_toc, _("EPUB: inline TOC", lang)),
             (
+                getattr(state, "epub_remove_background", False),
+                _("Remove EPUB background", lang),
+            ),
+            (
                 state.pdf_paper_size != "default",
                 _("PDF paper size: {}", lang).format(state.pdf_paper_size.upper()),
             ),
@@ -126,6 +131,31 @@ def render_options_summary(state: ConversionRequestState, lang: str) -> str:
         if enabled
     ]
     return "\n".join(summary_parts)
+
+
+def build_conversion_options(state: ConversionRequestState) -> ConversionOptions:
+    options = ConversionOptions()
+    option_values = {
+        "force_rtl": state.force_rtl,
+        "fix_epub": state.fix_epub if state.input_ext == "epub" else False,
+        "flat_toc": state.flat_toc if state.input_ext == "epub" else False,
+        "smarten_punctuation": state.smarten_punctuation,
+        "change_justification": state.change_justification,
+        "remove_paragraph_spacing": state.remove_paragraph_spacing,
+        "kfx_doc_type": state.kfx_doc_type,
+        "kfx_pages": state.kfx_pages,
+        "docx_page_size": state.docx_page_size,
+        "docx_no_toc": state.docx_no_toc,
+        "epub_version": state.epub_version,
+        "epub_inline_toc": state.epub_inline_toc,
+        "epub_remove_background": getattr(state, "epub_remove_background", False),
+        "pdf_paper_size": state.pdf_paper_size,
+        "pdf_page_numbers": state.pdf_page_numbers,
+    }
+    for key, value in option_values.items():
+        if hasattr(options, key):
+            setattr(options, key, value)
+    return options
 
 
 def render_screen(
@@ -310,22 +340,7 @@ async def converter_callback(
         return None
     reply = await event.edit(_("Converting the file to {}...", lang).format(output_type))
     input_file = Path(state.input_file_path)
-    options = ConversionOptions(
-        force_rtl=state.force_rtl,
-        fix_epub=state.fix_epub if state.input_ext == "epub" else False,
-        flat_toc=state.flat_toc if state.input_ext == "epub" else False,
-        smarten_punctuation=state.smarten_punctuation,
-        change_justification=state.change_justification,
-        remove_paragraph_spacing=state.remove_paragraph_spacing,
-        kfx_doc_type=state.kfx_doc_type,
-        kfx_pages=state.kfx_pages,
-        docx_page_size=state.docx_page_size,
-        docx_no_toc=state.docx_no_toc,
-        epub_version=state.epub_version,
-        epub_inline_toc=state.epub_inline_toc,
-        pdf_paper_size=state.pdf_paper_size,
-        pdf_page_numbers=state.pdf_page_numbers,
-    )
+    options = build_conversion_options(state)
     output_file, converted_to_rtl, conversion_error = await converter.convert_ebook(
         input_file,
         output_type,

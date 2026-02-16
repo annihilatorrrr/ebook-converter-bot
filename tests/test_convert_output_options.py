@@ -65,12 +65,16 @@ def test_epub_options_are_applied_only_when_changed(tmp_path: Path) -> None:
             options=ConversionOptions(
                 epub_version="3",
                 epub_inline_toc=True,
+                epub_remove_background=True,
             ),
         )
 
         command = commands[0]
         assert _contains_flag_pair(command, "--epub-version", "3")
         assert "--epub-inline-toc" in command
+        assert _contains_flag_pair(
+            command, "--filter-css", "background,background-color,background-image"
+        )
 
     asyncio.run(run())
 
@@ -113,6 +117,7 @@ def test_format_specific_flags_do_not_leak_to_other_outputs(tmp_path: Path) -> N
                 docx_no_toc=True,
                 epub_version="3",
                 epub_inline_toc=True,
+                epub_remove_background=True,
                 pdf_paper_size="letter",
                 pdf_page_numbers=True,
             ),
@@ -123,7 +128,32 @@ def test_format_specific_flags_do_not_leak_to_other_outputs(tmp_path: Path) -> N
         assert "--docx-no-toc" not in command
         assert "--epub-version" not in command
         assert "--epub-inline-toc" not in command
+        assert "--filter-css" not in command
         assert "--paper-size" not in command
         assert "--pdf-page-numbers" not in command
+
+    asyncio.run(run())
+
+
+def test_epub_remove_background_applies_for_epub_input_to_epub_output(tmp_path: Path) -> None:
+    async def run() -> None:
+        converter = Converter()
+        commands = _capture_commands(converter)
+        input_file = tmp_path / "book.epub"
+        input_file.write_text("hello")
+
+        await converter.convert_ebook(
+            input_file,
+            "epub",
+            options=ConversionOptions(epub_remove_background=True),
+        )
+
+        command = commands[0]
+        assert command[0] == "ebook-convert"
+        assert command[1] == str(input_file)
+        assert command[2].endswith("_.epub")
+        assert _contains_flag_pair(
+            command, "--filter-css", "background,background-color,background-image"
+        )
 
     asyncio.run(run())

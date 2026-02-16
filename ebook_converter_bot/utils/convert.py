@@ -35,6 +35,7 @@ class ConversionOptions:
     docx_no_toc: bool = False
     epub_version: str = "default"
     epub_inline_toc: bool = False
+    epub_remove_background: bool = False
     pdf_paper_size: str = "default"
     pdf_page_numbers: bool = False
 
@@ -183,6 +184,8 @@ class Converter:
             command.extend(["--epub-version", options.epub_version])
         if options.epub_inline_toc:
             command.append("--epub-inline-toc")
+        if options.epub_remove_background:
+            command.extend(["--filter-css", "background,background-color,background-image"])
 
     @staticmethod
     def _append_pdf_options(command: list[str], options: ConversionOptions) -> None:
@@ -305,6 +308,18 @@ class Converter:
         set_to_rtl = (
             self._preprocess_input_epub(input_file, options) if input_type == "epub" else None
         )
+        rebuild_epub = (
+            input_type == "epub"
+            and output_type == "epub"
+            and (
+                options.smarten_punctuation
+                or options.remove_paragraph_spacing
+                or options.change_justification != "original"
+                or options.epub_version != "default"
+                or options.epub_inline_toc
+                or options.epub_remove_background
+            )
+        )
 
         if input_type in self.kfx_input_allowed_types:
             return await self._convert_from_kfx_input(input_file, output_type, options)
@@ -315,11 +330,16 @@ class Converter:
             _, conversion_error = await self._convert_to_kfx(input_file, options)
             return output_file, set_to_rtl, conversion_error
 
-        if output_type not in self.supported_output_types or input_type == output_type:
+        if output_type not in self.supported_output_types:
+            return output_file, set_to_rtl, conversion_error
+        if input_type == output_type and not rebuild_epub:
             return output_file, set_to_rtl, conversion_error
 
         if output_type == "kepub":
             output_file = input_file.with_suffix(".kepub")
+        elif rebuild_epub:
+            output_file = input_file.with_name(f"{input_file.stem}_.epub")
+            output_file.unlink(missing_ok=True)
 
         command = ["ebook-convert", str(input_file), str(output_file)]
         self._append_ebook_convert_options(command, output_type, options)
@@ -356,6 +376,7 @@ class Converter:
                     docx_no_toc=False,
                     epub_version="default",
                     epub_inline_toc=False,
+                    epub_remove_background=False,
                     pdf_paper_size="default",
                     pdf_page_numbers=False,
                 )

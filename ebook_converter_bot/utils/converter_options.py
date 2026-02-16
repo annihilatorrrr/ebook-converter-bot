@@ -56,7 +56,10 @@ CONTEXT_VALUE_OPTIONS: dict[str, tuple[tuple[str, str, tuple[tuple[str, str], ..
 }
 CONTEXT_BOOL_OPTIONS: dict[str, tuple[tuple[str, str], ...]] = {
     "docx": (("docx_no_toc", "docx_no_toc_label"),),
-    "epub": (("epub_inline_toc", "epub_inline_toc_label"),),
+    "epub": (
+        ("epub_inline_toc", "epub_inline_toc_label"),
+        ("epub_remove_background", "epub_remove_background_label"),
+    ),
     "pdf": (("pdf_page_numbers", "pdf_page_numbers_label"),),
     "kfx": (),
 }
@@ -68,6 +71,7 @@ BOOL_OPTION_ATTRS: dict[str, str] = {
     "remove_paragraph_spacing": "remove_paragraph_spacing",
     "docx_no_toc": "docx_no_toc",
     "epub_inline_toc": "epub_inline_toc",
+    "epub_remove_background": "epub_remove_background",
     "pdf_page_numbers": "pdf_page_numbers",
 }
 EPUB_ONLY_BOOL_OPTIONS: set[str] = {"fix_epub", "flat_toc"}
@@ -111,6 +115,7 @@ class ConversionRequestState:
     docx_no_toc: bool = False
     epub_version: str = "default"
     epub_inline_toc: bool = False
+    epub_remove_background: bool = False
     pdf_paper_size: str = "default"
     pdf_page_numbers: bool = False
 
@@ -147,7 +152,7 @@ def build_options_keyboard(
     ]
 
     def add_bool_row(option_key: str, label_key: str) -> None:
-        selected = getattr(state, BOOL_OPTION_ATTRS[option_key])
+        selected = getattr(state, BOOL_OPTION_ATTRS[option_key], False)
         rows.append(
             [
                 Button.inline(
@@ -189,8 +194,12 @@ def build_options_keyboard(
         for option_key, label_key in EPUB_EXTRA_BOOL_OPTIONS:
             add_bool_row(option_key, label_key)
 
-    rows.append([Button.inline(labels["back_to_formats_label"], data=f"view|formats|{request_id}")])
-    rows.append([Button.inline(labels["cancel_label"], data=f"cancel|{request_id}")])
+    rows.append(
+        [
+            Button.inline(labels["back_to_formats_label"], data=f"view|formats|{request_id}"),
+            Button.inline(labels["cancel_label"], data=f"cancel|{request_id}"),
+        ]
+    )
     return rows
 
 
