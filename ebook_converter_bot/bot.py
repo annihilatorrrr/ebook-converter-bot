@@ -44,13 +44,18 @@ async def run() -> None:
     )
     load_modules(ALL_MODULES, __package__ or "ebook_converter_bot")
     # Check if the bot is restarting
-    if Path("restart.json").exists():
-        restart_message = json.loads(Path("restart.json").read_text())
-        await BOT.edit_message(
-            restart_message["chat"],
-            restart_message["message"],
-            "Restarted Successfully!",
-        )
-        Path("restart.json").unlink(missing_ok=True)
+    restart_path = Path("restart.json")
+    if restart_path.exists():
+        try:
+            restart_message = json.loads(restart_path.read_text())
+            await BOT.edit_message(
+                restart_message["chat"],
+                restart_message["message"],
+                "Restarted Successfully!",
+            )
+        except Exception as error:  # noqa: BLE001
+            LOGGER.warning(f"Failed to send restart confirmation: {error}")
+        finally:
+            restart_path.unlink(missing_ok=True)
     async with BOT:
         await BOT.run_until_disconnected()

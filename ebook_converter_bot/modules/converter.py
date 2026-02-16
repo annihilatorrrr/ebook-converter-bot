@@ -35,7 +35,13 @@ def cleanup_queue() -> None:
 async def cleanup_queue_loop() -> None:
     while True:
         cleanup_queue()
-        await asyncio.sleep(60)
+        sleep_task = asyncio.create_task(asyncio.sleep(60))
+        done, _ = await asyncio.wait(
+            {sleep_task, BOT.disconnected}, return_when=asyncio.FIRST_COMPLETED
+        )
+        if BOT.disconnected in done:
+            sleep_task.cancel()
+            break
 
 
 queue_cleanup_task = BOT.loop.create_task(cleanup_queue_loop())
