@@ -148,3 +148,44 @@ msgstr ""
 "uyguladığınız adımların aynısını uygulayın.\n"
 "Botun dil vb. ayarlarını değiştirmek için /settings ya da /preferences "
 "emirlerini kullanabilirsiniz."
+
+#: ebook_converter_bot/modules/converter.py:79
+msgid "Options ⚙️"
+msgstr "Seçenekler ⚙️"
+
+#: ebook_converter_bot/modules/converter.py:80
+#: ebook_converter_bot/modules/converter.py:72
+msgid "Cancel"
+msgstr "İptal"
+
+#: ebook_converter_bot/modules/converter.py:64
+msgid "Conversion options:"
+msgstr "Dönüştürme seçenekleri:"
+
+#: ebook_converter_bot/modules/converter.py:71
+msgid "Back to formats"
+msgstr "Biçimlere geri dön"
+
+#: ebook_converter_bot/modules/converter.py:97
+msgid "This conversion request expired. Please send the file again."
+msgstr "Bu dönüştürme isteğinin süresi doldu. Lütfen dosyayı tekrar gönderin."
+
+#: ebook_converter_bot/modules/converter.py:105
+msgid "The source file is no longer available. Please send it again."
+msgstr "Kaynak dosya artık kullanılamıyor. Lütfen tekrar gönderin."
+
+#: ebook_converter_bot/modules/converter.py:123
+msgid "Reply to a supported file to convert it."
+msgstr "Dönüştürmek için desteklenen bir dosyayı yanıtlayın."
+
+#: ebook_converter_bot/modules/converter.py:144
+msgid "Failed to download the file. Please send it again."
+msgstr "Dosya indirilemedi. Lütfen tekrar gönderin."
+
+#: ebook_converter_bot/modules/converter.py:188
+msgid "This option is available only for EPUB input."
+msgstr "Bu seçenek yalnızca EPUB girişi için kullanılabilir."
+
+#: ebook_converter_bot/modules/converter.py:209
+msgid "Conversion request canceled."
+msgstr "Dönüştürme isteği iptal edildi."

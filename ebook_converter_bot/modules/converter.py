@@ -5,14 +5,21 @@ from pathlib import Path
 from random import sample
 from string import digits
 from time import monotonic
+from typing import cast
 
 from telethon import Button, events
-from telethon.tl.custom import Message, MessageButton
 
 from ebook_converter_bot.bot import BOT
 from ebook_converter_bot.db.curd import get_lang
 from ebook_converter_bot.utils.analytics import analysis
 from ebook_converter_bot.utils.convert import Converter
+from ebook_converter_bot.utils.converter_options import (
+    ConversionRequestState,
+    build_options_keyboard,
+    cleanup_expired_requests,
+    format_button_rows,
+    toggle_request_option,
+)
 from ebook_converter_bot.utils.i18n import translate as _
 from ebook_converter_bot.utils.telegram import tg_exceptions_handler
 
@@ -20,21 +27,16 @@ MAX_ALLOWED_FILE_SIZE = 26214400  # 25 MB
 QUEUE_TTL_SECONDS = 1800  # 30 minutes
 
 converter = Converter()
-queue: dict[str, tuple[str, float]] = {}
-
-
-def cleanup_queue() -> None:
-    now = monotonic()
-    for random_id, (input_file_path, queued_at) in list(queue.items()):
-        if now - queued_at <= QUEUE_TTL_SECONDS:
-            continue
-        queue.pop(random_id, None)
-        Path(input_file_path).unlink(missing_ok=True)
+if "converter_queue" not in BOT.__dict__:
+    BOT.__dict__["converter_queue"] = {}
+queue: dict[str, ConversionRequestState] = cast(
+    dict[str, ConversionRequestState], BOT.__dict__["converter_queue"]
+)
 
 
 async def cleanup_queue_loop() -> None:
     while True:
-        cleanup_queue()
+        cleanup_expired_requests(queue, ttl_seconds=QUEUE_TTL_SECONDS)
         sleep_task = asyncio.create_task(asyncio.sleep(60))
         done, _ = await asyncio.wait(
             {sleep_task, BOT.disconnected}, return_when=asyncio.FIRST_COMPLETED
@@ -45,6 +47,71 @@ async def cleanup_queue_loop() -> None:
 
 
 queue_cleanup_task = BOT.loop.create_task(cleanup_queue_loop())
+
+
+def render_screen(
+    request_id: str,
+    state: ConversionRequestState,
+    lang: str,
+    *,
+    show_options: bool = False,
+) -> tuple[str, list[list]]:
+    summary_parts = [f"{_('Force RTL', lang)}: {'✅' if state.force_rtl else '❌'}"]
+    if state.input_ext == "epub":
+        summary_parts.append(
+            f"{_('Fix EPUB before converting', lang)}: {'✅' if state.fix_epub else '❌'}"
+        )
+        summary_parts.append(f"{_('Flatten EPUB TOC', lang)}: {'✅' if state.flat_toc else '❌'}")
+    summary = "\n".join(summary_parts)
+    if show_options:
+        message_text = f"{_('Conversion options:', lang)}\n\n{summary}"
+        buttons = build_options_keyboard(
+            request_id,
+            state,
+            force_rtl_label=_("Force RTL", lang),
+            fix_epub_label=_("Fix EPUB before converting", lang),
+            flat_toc_label=_("Flatten EPUB TOC", lang),
+            back_to_formats_label=_("Back to formats", lang),
+            cancel_label=_("Cancel", lang),
+        )
+        return message_text, buttons
+    message_text = f"{_('Select the format you want to convert to:', lang)}\n\n{summary}"
+    buttons = format_button_rows(request_id, converter.supported_output_types, per_row=3)
+    buttons.append(
+        [
+            Button.inline(_("Options ⚙️", lang), data=f"view|opts|{request_id}"),
+            Button.inline(_("Cancel", lang), data=f"cancel|{request_id}"),
+        ]
+    )
+    return message_text, buttons
+
+
+async def get_request_state(
+    event: events.CallbackQuery.Event,
+    request_id: str,
+    *,
+    pop: bool = False,
+) -> ConversionRequestState | None:
+    cleanup_expired_requests(queue, ttl_seconds=QUEUE_TTL_SECONDS)
+    lang = get_lang(event.chat_id)
+    state = queue.pop(request_id, None) if pop else queue.get(request_id)
+    if not state:
+        await event.answer(
+            _("This conversion request expired. Please send the file again.", lang),
+            alert=True,
+        )
+        return None
+    input_file = Path(state.input_file_path)
+    if not input_file.exists():
+        queue.pop(request_id, None)
+        await event.answer(
+            _("The source file is no longer available. Please send it again.", lang),
+            alert=True,
+        )
+        return None
+    if not pop:
+        state.queued_at = monotonic()
+    return state
 
 
 @BOT.on(events.NewMessage(func=lambda x: x.message.file and x.is_private))
@@ -76,152 +143,94 @@ async def file_converter(event: events.NewMessage.Event) -> None:
     download_dir = Path("/tmp/ebook_converter_bot")  # noqa: S108
     download_dir.mkdir(parents=True, exist_ok=True)
     downloaded = await message.download_media(download_dir)
-    cleanup_queue()
+    if not downloaded:
+        await reply.edit(_("Failed to download the file. Please send it again.", lang))
+        return
+    cleanup_expired_requests(queue, ttl_seconds=QUEUE_TTL_SECONDS)
     random_id = "".join(sample(digits, 8))
     while random_id in queue:
         random_id = "".join(sample(digits, 8))
-    queue.update({random_id: (downloaded, monotonic())})
-    buttons = [
-        Button.inline("🔸 azw3", data=f"azw3|{random_id}"),
-        Button.inline("🔸 docx", data=f"docx|{random_id}"),
-        Button.inline("🔸 epub", data=f"epub|{random_id}"),
-        Button.inline("fb2", data=f"fb2|{random_id}"),
-        Button.inline("htmlz", data=f"htmlz|{random_id}"),
-        Button.inline("kepub", data=f"kepub|{random_id}"),
-        Button.inline("🔸 kfx", data=f"kfx|{random_id}"),
-        Button.inline("lit", data=f"lit|{random_id}"),
-        Button.inline("lrf", data=f"lrf|{random_id}"),
-        Button.inline("🔸 mobi", data=f"mobi|{random_id}"),
-        Button.inline("oeb", data=f"oeb|{random_id}"),
-        Button.inline("pdb", data=f"pdb|{random_id}"),
-        Button.inline("🔸 pdf", data=f"pdf|{random_id}"),
-        Button.inline("pmlz", data=f"pmlz|{random_id}"),
-        Button.inline("rb", data=f"rb|{random_id}"),
-        Button.inline("rtf", data=f"rtf|{random_id}"),
-        Button.inline("snb", data=f"snb|{random_id}"),
-        Button.inline("tcr", data=f"tcr|{random_id}"),
-        Button.inline("txt", data=f"txt|{random_id}"),
-        Button.inline("txtz", data=f"txtz|{random_id}"),
-        Button.inline("zip", data=f"zip|{random_id}"),
-    ]
-    buttons = [buttons[i::5] for i in range(5)]
-    buttons.append([Button.inline(_("Force RTL", lang) + " ❓", data="rtl_disabled")])
-    if file_name.lower().endswith(".epub"):
-        buttons.extend(
-            [
-                [Button.inline(_("Fix EPUB before converting", lang) + " ❓", data="epub_keep")],
-                [Button.inline(_("Flatten EPUB TOC", lang) + " ❓", data="epub_keep_toc")],
-            ]
-        )
-    await reply.edit(_("Select the format you want to convert to:", lang), buttons=buttons)
+    queue[random_id] = ConversionRequestState(
+        input_file_path=downloaded,
+        queued_at=monotonic(),
+        input_ext=file_name.lower().split(".")[-1],
+    )
+    message_text, buttons = render_screen(random_id, queue[random_id], lang)
+    await reply.edit(message_text, buttons=buttons)
 
 
-@BOT.on(events.CallbackQuery(pattern="rtl_enabled|rtl_disabled"))
+@BOT.on(events.CallbackQuery(pattern=r"view\|(opts|formats)\|\d+"))
 @tg_exceptions_handler
-async def rtl_enable_callback(event: events.CallbackQuery.Event) -> None:
-    """RTL callback handler."""
-    message: Message = await event.get_message()
+async def view_switch_callback(event: events.CallbackQuery.Event) -> None:
+    _view, view_name, request_id = event.data.decode().split("|")
     lang = get_lang(event.chat_id)
-    epub_button_row = None
-    if message.buttons[-1][0].data.startswith(b"epub"):
-        epub_button_row = message.buttons.pop(-1)
-    rtl_button_row: list[MessageButton] = message.buttons[5]
-    if event.data == b"rtl_disabled":
-        rtl_button_row[0] = Button.inline(_("Force RTL", lang) + " ✅", data="rtl_enabled")
-    elif event.data == b"rtl_enabled":
-        rtl_button_row[0] = Button.inline(_("Force RTL", lang) + " ❌", data="rtl_disabled")
-    message.buttons[5] = rtl_button_row
-    if epub_button_row:
-        message.buttons.append(epub_button_row)
-    await message.edit(message.text, buttons=message.buttons)
+    state = await get_request_state(event, request_id)
+    if not state:
+        return
+    if view_name == "opts":
+        message_text, buttons = render_screen(request_id, state, lang, show_options=True)
+        await event.edit(message_text, buttons=buttons)
+        return
+    message_text, buttons = render_screen(request_id, state, lang)
+    await event.edit(message_text, buttons=buttons)
 
 
-@BOT.on(events.CallbackQuery(pattern="epub_fix|epub_keep"))
+@BOT.on(events.CallbackQuery(pattern=r"opt\|(rtl|fix_epub|flat_toc)\|\d+"))
 @tg_exceptions_handler
-async def epub_fix_enable_callback(event: events.CallbackQuery.Event) -> None:
-    """Epub Fix callback handler."""
-    message: Message = await event.get_message()
+async def options_toggle_callback(event: events.CallbackQuery.Event) -> None:
+    _opt, option_key, request_id = event.data.decode().split("|")
     lang = get_lang(event.chat_id)
-    epub_button_row: list[MessageButton] = message.buttons[-2]
-    if event.data == b"epub_keep":
-        epub_button_row[0] = Button.inline(
-            _("Fix EPUB before converting", lang) + " ✅", data="epub_fix"
-        )
-    elif event.data == b"epub_fix":
-        epub_button_row[0] = Button.inline(
-            _("Fix EPUB before converting", lang) + " ❌", data="epub_keep"
-        )
-    message.buttons[-2] = epub_button_row
-    await message.edit(message.text, buttons=message.buttons)
+    state = await get_request_state(event, request_id)
+    if not state:
+        return
+    if not toggle_request_option(state, option_key):
+        await event.answer(_("This option is available only for EPUB input.", lang), alert=True)
+        return
+    message_text, buttons = render_screen(request_id, state, lang, show_options=True)
+    await event.edit(message_text, buttons=buttons)
 
 
-@BOT.on(events.CallbackQuery(pattern="epub_flat_toc|epub_keep_toc"))
+@BOT.on(events.CallbackQuery(pattern=r"cancel\|\d+"))
 @tg_exceptions_handler
-async def epub_toc_edit_enable_callback(event: events.CallbackQuery.Event) -> None:
-    """Epub TOC edit callback handler."""
-    message: Message = await event.get_message()
+async def cancel_conversion_callback(event: events.CallbackQuery.Event) -> None:
+    _cancel, request_id = event.data.decode().split("|")
     lang = get_lang(event.chat_id)
-    epub_button_row: list[MessageButton] = message.buttons[-1]
-    if event.data == b"epub_keep_toc":
-        epub_button_row[0] = Button.inline(
-            _("Flatten EPUB TOC", lang) + " ✅", data="epub_flat_toc"
+    state = queue.pop(request_id, None)
+    if not state:
+        await event.answer(
+            _("This conversion request expired. Please send the file again.", lang),
+            alert=True,
         )
-    elif event.data == b"epub_flat_toc":
-        epub_button_row[0] = Button.inline(
-            _("Flatten EPUB TOC", lang) + " ❌", data="epub_keep_toc"
-        )
-    message.buttons[-1] = epub_button_row
-    await message.edit(message.text, buttons=message.buttons)
+        return
+    Path(state.input_file_path).unlink(missing_ok=True)
+    await event.edit(_("Conversion request canceled.", lang))
 
 
-@BOT.on(events.CallbackQuery(pattern=r"\w+\|\d+"))
+@BOT.on(events.CallbackQuery(pattern=r"fmt\|[\w-]+\|\d+"))
 @tg_exceptions_handler
 @analysis
 async def converter_callback(
     event: events.CallbackQuery.Event,
 ) -> tuple[str, str] | None:
     """Converter callback handler."""
-    message: Message = await event.get_message()
-    fix_epub = False
-    flat_toc = False
-    if message.buttons[-1][0].data.startswith(b"epub"):
-        convert_to_rtl = message.buttons[-3][0].data == b"rtl_enabled"
-        fix_epub = message.buttons[-2][0].data == b"epub_fix"
-        flat_toc = message.buttons[-1][0].data == b"epub_flat_toc"
-    else:
-        convert_to_rtl = message.buttons[-1][0].data == b"rtl_enabled"
     lang = get_lang(event.chat_id)
     converted = False
-    output_type: str
-    random_id: str
-    output_type, random_id = event.data.decode().split("|")
-    cleanup_queue()
-    input_file_data = queue.pop(random_id, None)
-    if not input_file_data:
-        await event.answer(
-            _("This conversion request expired. Please send the file again.", lang),
-            alert=True,
-        )
-        return None
-    input_file_path, _queued_at = input_file_data
-    input_file = Path(input_file_path)
-    if not input_file.exists():
-        await event.answer(
-            _("The source file is no longer available. Please send it again.", lang),
-            alert=True,
-        )
+    _fmt, output_type, request_id = event.data.decode().split("|")
+    state = await get_request_state(event, request_id, pop=True)
+    if not state:
         return None
     reply = await event.edit(_("Converting the file to {}...", lang).format(output_type))
+    input_file = Path(state.input_file_path)
     output_file, converted_to_rtl, conversion_error = await converter.convert_ebook(
         input_file,
         output_type,
-        force_rtl=convert_to_rtl,
-        fix_epub=fix_epub,
-        flat_toc=flat_toc,
+        force_rtl=state.force_rtl,
+        fix_epub=state.fix_epub if state.input_ext == "epub" else False,
+        flat_toc=state.flat_toc if state.input_ext == "epub" else False,
     )
     if output_file.exists():
         message_text = ""
-        if convert_to_rtl and converted_to_rtl:
+        if state.force_rtl and converted_to_rtl:
             message_text += _("Converted to RTL successfully!\n", lang)
         message_text += _("Done! Uploading the converted file...", lang)
         await reply.edit(message_text)
@@ -238,5 +247,5 @@ async def converter_callback(
     input_file.unlink(missing_ok=True)
     output_file.unlink(missing_ok=True)
     if converted:
-        return input_file.suffix.removeprefix("."), output_type
+        return state.input_ext, output_type
     return None

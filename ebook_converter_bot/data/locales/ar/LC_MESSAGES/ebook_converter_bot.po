@@ -149,3 +149,44 @@ msgstr ""
 "نفس الخطوات كما بالرسائل الخاصة\n"
 "كما يمكن تغيير إعدادات البوت مثل اللغة باستخدام الأوامر /settings أو /"
 "preferences."
+
+#: ebook_converter_bot/modules/converter.py:79
+msgid "Options ⚙️"
+msgstr "الخيارات ⚙️"
+
+#: ebook_converter_bot/modules/converter.py:80
+#: ebook_converter_bot/modules/converter.py:72
+msgid "Cancel"
+msgstr "إلغاء"
+
+#: ebook_converter_bot/modules/converter.py:64
+msgid "Conversion options:"
+msgstr "خيارات التحويل:"
+
+#: ebook_converter_bot/modules/converter.py:71
+msgid "Back to formats"
+msgstr "العودة إلى الصيغ"
+
+#: ebook_converter_bot/modules/converter.py:97
+msgid "This conversion request expired. Please send the file again."
+msgstr "انتهت صلاحية طلب التحويل هذا. يرجى إرسال الملف مرة أخرى."
+
+#: ebook_converter_bot/modules/converter.py:105
+msgid "The source file is no longer available. Please send it again."
+msgstr "الملف المصدر لم يعد متاحًا. يرجى إرساله مرة أخرى."
+
+#: ebook_converter_bot/modules/converter.py:123
+msgid "Reply to a supported file to convert it."
+msgstr "رد على ملف مدعوم لتحويله."
+
+#: ebook_converter_bot/modules/converter.py:144
+msgid "Failed to download the file. Please send it again."
+msgstr "فشل تنزيل الملف. يرجى إرساله مرة أخرى."
+
+#: ebook_converter_bot/modules/converter.py:188
+msgid "This option is available only for EPUB input."
+msgstr "هذا الخيار متاح فقط عند إدخال EPUB."
+
+#: ebook_converter_bot/modules/converter.py:209
+msgid "Conversion request canceled."
+msgstr "ألغى طلب التحويل."
