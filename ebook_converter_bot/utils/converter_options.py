@@ -194,6 +194,7 @@ def build_options_keyboard(
         for option_key, label_key in EPUB_EXTRA_BOOL_OPTIONS:
             add_bool_row(option_key, label_key)
 
+    rows.append([Button.inline(labels["reset_options_label"], data=f"opt|reset|1|{request_id}")])
     rows.append(
         [
             Button.inline(labels["back_to_formats_label"], data=f"view|formats|{request_id}"),
@@ -204,21 +205,35 @@ def build_options_keyboard(
 
 
 def set_request_option(state: ConversionRequestState, option_key: str, option_value: str) -> bool:
+    if option_key == "reset":
+        state.force_rtl = False
+        state.fix_epub = False
+        state.flat_toc = False
+        state.smarten_punctuation = False
+        state.change_justification = "original"
+        state.remove_paragraph_spacing = False
+        state.kfx_doc_type = "doc"
+        state.kfx_pages = None
+        state.docx_page_size = "default"
+        state.docx_no_toc = False
+        state.epub_version = "default"
+        state.epub_inline_toc = False
+        state.epub_remove_background = False
+        state.pdf_paper_size = "default"
+        state.pdf_page_numbers = False
+        return True
     bool_value = {"1": True, "0": False}.get(option_value)
     if option_key in BOOL_OPTION_ATTRS:
-        if bool_value is None:
-            return False
-        if option_key in EPUB_ONLY_BOOL_OPTIONS and state.input_ext != "epub":
+        if bool_value is None or (
+            option_key in EPUB_ONLY_BOOL_OPTIONS and state.input_ext != "epub"
+        ):
             return False
         setattr(state, BOOL_OPTION_ATTRS[option_key], bool_value)
         return True
-    if option_key not in VALUE_OPTION_ATTRS:
-        return False
-    value_map = VALUE_OPTION_MAP[option_key]
-    if option_value not in value_map:
-        return False
-    setattr(state, VALUE_OPTION_ATTRS[option_key], value_map[option_value])
-    return True
+    if option_key in VALUE_OPTION_ATTRS and option_value in VALUE_OPTION_MAP[option_key]:
+        setattr(state, VALUE_OPTION_ATTRS[option_key], VALUE_OPTION_MAP[option_key][option_value])
+        return True
+    return False
 
 
 def cleanup_expired_requests(

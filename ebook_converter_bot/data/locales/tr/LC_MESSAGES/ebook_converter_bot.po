@@ -140,11 +140,15 @@ msgid "Auto"
 msgstr "Otomatik"
 
 #: ebook_converter_bot/modules/converter.py:85
+msgid "Reset options"
+msgstr "Seçenekleri sıfırla"
+
+#: ebook_converter_bot/modules/converter.py:86
 msgid "Back to formats"
 msgstr "Biçimlere geri dön"
 
-#: ebook_converter_bot/modules/converter.py:86
-#: ebook_converter_bot/modules/converter.py:159
+#: ebook_converter_bot/modules/converter.py:87
+#: ebook_converter_bot/modules/converter.py:160
 msgid "Cancel"
 msgstr "İptal"
 

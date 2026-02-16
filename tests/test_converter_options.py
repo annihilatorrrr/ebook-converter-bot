@@ -36,6 +36,7 @@ LABELS = {
     "auto_label": "Auto",
     "pdoc_label": "PDOC",
     "ebok_label": "EBOK",
+    "reset_options_label": "Reset options",
     "back_to_formats_label": "Back to formats",
     "cancel_label": "Cancel",
 }
@@ -83,6 +84,7 @@ def test_options_keyboard_context_tabs_and_docx_controls() -> None:
     assert b"opt|kfx_doc_type|doc|12345678" not in data
     assert b"opt|fix_epub|1|12345678" in data
     assert b"opt|flat_toc|1|12345678" in data
+    assert [button.data for button in rows[-2]] == [b"opt|reset|1|12345678"]
     assert [button.data for button in rows[-1]] == [
         b"view|formats|12345678",
         b"cancel|12345678",
@@ -184,6 +186,46 @@ def test_set_request_option_is_idempotent_and_validates_values() -> None:
 
     assert set_request_option(state, "epub_version", "4") is False
     assert set_request_option(state, "docx_page_size", "legal") is False
+
+
+def test_set_request_option_reset_clears_all_options() -> None:
+    state = ConversionRequestState(
+        input_file_path="/tmp/book.epub",  # noqa: S108
+        queued_at=monotonic(),
+        input_ext="epub",
+        force_rtl=True,
+        fix_epub=True,
+        flat_toc=True,
+        smarten_punctuation=True,
+        change_justification="justify",
+        remove_paragraph_spacing=True,
+        kfx_doc_type="book",
+        kfx_pages=0,
+        docx_page_size="a4",
+        docx_no_toc=True,
+        epub_version="3",
+        epub_inline_toc=True,
+        epub_remove_background=True,
+        pdf_paper_size="letter",
+        pdf_page_numbers=True,
+    )
+
+    assert set_request_option(state, "reset", "1") is True
+    assert state.force_rtl is False
+    assert state.fix_epub is False
+    assert state.flat_toc is False
+    assert state.smarten_punctuation is False
+    assert state.change_justification == "original"
+    assert state.remove_paragraph_spacing is False
+    assert state.kfx_doc_type == "doc"
+    assert state.kfx_pages is None
+    assert state.docx_page_size == "default"
+    assert state.docx_no_toc is False
+    assert state.epub_version == "default"
+    assert state.epub_inline_toc is False
+    assert state.epub_remove_background is False
+    assert state.pdf_paper_size == "default"
+    assert state.pdf_page_numbers is False
 
 
 def test_set_request_option_rejects_epub_only_flags_for_non_epub() -> None:

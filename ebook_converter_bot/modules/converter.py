@@ -82,6 +82,7 @@ def options_labels(lang: str) -> dict[str, str]:
         "auto_label": _("Auto", lang),
         "pdoc_label": "PDOC",
         "ebok_label": "EBOK",
+        "reset_options_label": _("Reset options", lang),
         "back_to_formats_label": _("Back to formats", lang),
         "cancel_label": _("Cancel", lang),
     }
