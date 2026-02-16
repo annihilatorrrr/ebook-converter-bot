@@ -10,7 +10,7 @@ services:
       - PUID=1000
       - PGID=1000
       - TZ=Africa/Cairo
-      - /etc/localtime:/etc/localtime:ro
     restart: unless-stopped
     volumes:
       - "./:/app"
+      - /etc/localtime:/etc/localtime:ro
