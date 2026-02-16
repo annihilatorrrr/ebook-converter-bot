@@ -3,6 +3,7 @@
 from pathlib import Path
 from random import sample
 from string import digits
+from time import monotonic
 
 from telethon import Button, events
 from telethon.tl.custom import Message, MessageButton
@@ -15,9 +16,19 @@ from ebook_converter_bot.utils.i18n import translate as _
 from ebook_converter_bot.utils.telegram import tg_exceptions_handler
 
 MAX_ALLOWED_FILE_SIZE = 26214400  # 25 MB
+QUEUE_TTL_SECONDS = 1800  # 30 minutes
 
 converter = Converter()
-queue = {}
+queue: dict[str, tuple[str, float]] = {}
+
+
+def cleanup_queue() -> None:
+    now = monotonic()
+    for random_id, (input_file_path, queued_at) in list(queue.items()):
+        if now - queued_at <= QUEUE_TTL_SECONDS:
+            continue
+        queue.pop(random_id, None)
+        Path(input_file_path).unlink(missing_ok=True)
 
 
 @BOT.on(events.NewMessage(func=lambda x: x.message.file and x.is_private))
@@ -46,8 +57,11 @@ async def file_converter(event: events.NewMessage.Event) -> None:
     download_dir = Path("/tmp/ebook_converter_bot")  # noqa: S108
     download_dir.mkdir(parents=True, exist_ok=True)
     downloaded = await message.download_media(download_dir)
+    cleanup_queue()
     random_id = "".join(sample(digits, 8))
-    queue.update({random_id: downloaded})
+    while random_id in queue:
+        random_id = "".join(sample(digits, 8))
+    queue.update({random_id: (downloaded, monotonic())})
     buttons = [
         Button.inline("🔸 azw3", data=f"azw3|{random_id}"),
         Button.inline("🔸 docx", data=f"docx|{random_id}"),
@@ -162,11 +176,21 @@ async def converter_callback(
     output_type: str
     random_id: str
     output_type, random_id = event.data.decode().split("|")
-    input_file_path = queue.pop(random_id, None)
-    if not input_file_path:
+    cleanup_queue()
+    input_file_data = queue.pop(random_id, None)
+    if not input_file_data:
+        await event.answer(
+            _("This conversion request expired. Please send the file again.", lang),
+            alert=True,
+        )
         return None
+    input_file_path, _queued_at = input_file_data
     input_file = Path(input_file_path)
     if not input_file.exists():
+        await event.answer(
+            _("The source file is no longer available. Please send it again.", lang),
+            alert=True,
+        )
         return None
     reply = await event.edit(_("Converting the file to {}...", lang).format(output_type))
     output_file, converted_to_rtl, conversion_error = await converter.convert_ebook(
