@@ -4,6 +4,7 @@ from telethon import events
 
 from ebook_converter_bot.bot import BOT, BOT_INFO
 from ebook_converter_bot.db.curd import add_chat_to_db, get_lang
+from ebook_converter_bot.utils.convert import Converter
 from ebook_converter_bot.utils.i18n import translate as _
 from ebook_converter_bot.utils.telegram import (
     get_chat_name,
@@ -17,16 +18,23 @@ from ebook_converter_bot.utils.telegram import (
 async def start(event: events.NewMessage.Event) -> None:
     """Send a message when the command /start is sent."""
     add_chat_to_db(event.chat_id, get_chat_name(event), get_chat_type(event))
+    lang = get_lang(event.chat_id)
+    input_count = len(Converter.supported_input_types)
+    output_count = len(Converter.supported_output_types)
     await event.reply(
         _(
-            "Hello {}!\n\n \
-        This bot allows you to convert E-Books to various formats, for example, from EPUB to KFX!\n \
-        It currently supports 34 input formats and 19 output formats, thanks to calibre powerful \
-        convert features.\n\n \
-        The bot is open source, you can find the source code of it [here](https://github.com/yshalsager/ebook-converter-bot).\n \
-        Developed by: [yshalsager](https://t.me/yshalsager/).",
-            get_lang(event.chat_id),
-        ).format(event.chat.first_name if hasattr(event.chat, "first_name") else event.chat.title)
+            "Hello {}!\n\n"
+            "This bot converts e-books between formats, for example from EPUB to KFX.\n"
+            "It currently supports {} input formats and {} output formats.\n"
+            "Send me a supported file now and I'll show you the available conversion options.\n\n"
+            "The bot is open source, you can find the source code [here](https://github.com/yshalsager/ebook-converter-bot).\n"
+            "Developed by: [yshalsager](https://t.me/yshalsager/).",
+            lang,
+        ).format(
+            event.chat.first_name if hasattr(event.chat, "first_name") else event.chat.title,
+            input_count,
+            output_count,
+        )
     )
 
 
