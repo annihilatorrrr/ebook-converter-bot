@@ -1,5 +1,6 @@
 """Converter."""
 
+import asyncio
 from pathlib import Path
 from random import sample
 from string import digits
@@ -31,6 +32,15 @@ def cleanup_queue() -> None:
         Path(input_file_path).unlink(missing_ok=True)
 
 
+async def cleanup_queue_loop() -> None:
+    while True:
+        cleanup_queue()
+        await asyncio.sleep(60)
+
+
+queue_cleanup_task = BOT.loop.create_task(cleanup_queue_loop())
+
+
 @BOT.on(events.NewMessage(func=lambda x: x.message.file and x.is_private))
 @BOT.on(events.NewMessage(pattern="/convert", func=lambda x: x.message.is_reply))
 @tg_exceptions_handler
@@ -39,6 +49,9 @@ async def file_converter(event: events.NewMessage.Event) -> None:
     lang = get_lang(event.chat_id)
     if event.pattern_match:
         message = await event.get_reply_message()
+        if not message or not message.file:
+            await event.reply(_("Reply to a supported file to convert it.", lang))
+            return
         file = message.file
     else:
         message = event.message
