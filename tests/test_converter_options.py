@@ -6,7 +6,7 @@ from ebook_converter_bot.utils.converter_options import (
     build_options_keyboard,
     cleanup_expired_requests,
     format_button_rows,
-    toggle_request_option,
+    set_request_option,
 )
 from telethon.tl.types import KeyboardButtonCallback
 
@@ -54,46 +54,48 @@ def test_options_keyboard_shows_epub_only_toggles_for_epub_input() -> None:
     )
 
     assert [row[0].data for row in epub_rows] == [
-        b"opt|rtl|12345678",
-        b"opt|fix_epub|12345678",
-        b"opt|flat_toc|12345678",
+        b"opt|rtl|1|12345678",
+        b"opt|fix_epub|1|12345678",
+        b"opt|flat_toc|1|12345678",
         b"view|formats|12345678",
         b"cancel|12345678",
     ]
     assert [row[0].data for row in non_epub_rows] == [
-        b"opt|rtl|12345678",
+        b"opt|rtl|1|12345678",
         b"view|formats|12345678",
         b"cancel|12345678",
     ]
 
 
-def test_toggle_request_option_mutates_only_selected_flag() -> None:
+def test_set_request_option_mutates_only_selected_flag() -> None:
     state = ConversionRequestState(
         input_file_path="/tmp/book.epub",  # noqa: S108
         queued_at=monotonic(),
         input_ext="epub",
     )
-    assert toggle_request_option(state, "rtl") is True
+    assert set_request_option(state, "rtl", True) is True
     assert state.force_rtl is True
     assert state.fix_epub is False
     assert state.flat_toc is False
 
-    assert toggle_request_option(state, "fix_epub") is True
+    assert set_request_option(state, "fix_epub", True) is True
     assert state.fix_epub is True
     assert state.flat_toc is False
 
-    assert toggle_request_option(state, "flat_toc") is True
+    assert set_request_option(state, "flat_toc", True) is True
     assert state.flat_toc is True
+    assert set_request_option(state, "rtl", False) is True
+    assert state.force_rtl is False
 
 
-def test_toggle_request_option_rejects_epub_only_flags_for_non_epub() -> None:
+def test_set_request_option_rejects_epub_only_flags_for_non_epub() -> None:
     state = ConversionRequestState(
         input_file_path="/tmp/book.pdf",  # noqa: S108
         queued_at=monotonic(),
         input_ext="pdf",
     )
-    assert toggle_request_option(state, "fix_epub") is False
-    assert toggle_request_option(state, "flat_toc") is False
+    assert set_request_option(state, "fix_epub", True) is False
+    assert set_request_option(state, "flat_toc", True) is False
 
 
 def test_cleanup_expired_requests_removes_stale_state_and_file(tmp_path: Path) -> None:

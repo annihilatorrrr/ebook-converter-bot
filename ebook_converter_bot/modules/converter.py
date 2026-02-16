@@ -18,7 +18,7 @@ from ebook_converter_bot.utils.converter_options import (
     build_options_keyboard,
     cleanup_expired_requests,
     format_button_rows,
-    toggle_request_option,
+    set_request_option,
 )
 from ebook_converter_bot.utils.i18n import translate as _
 from ebook_converter_bot.utils.telegram import tg_exceptions_handler
@@ -56,15 +56,20 @@ def render_screen(
     *,
     show_options: bool = False,
 ) -> tuple[str, list[list]]:
-    summary_parts = [f"{_('Force RTL', lang)}: {'✅' if state.force_rtl else '❌'}"]
-    if state.input_ext == "epub":
-        summary_parts.append(
-            f"{_('Fix EPUB before converting', lang)}: {'✅' if state.fix_epub else '❌'}"
-        )
-        summary_parts.append(f"{_('Flatten EPUB TOC', lang)}: {'✅' if state.flat_toc else '❌'}")
+    summary_parts: list[str] = []
+    if state.force_rtl:
+        summary_parts.append(_("Force RTL", lang))
+    if state.input_ext == "epub" and state.fix_epub:
+        summary_parts.append(_("Fix EPUB before converting", lang))
+    if state.input_ext == "epub" and state.flat_toc:
+        summary_parts.append(_("Flatten EPUB TOC", lang))
     summary = "\n".join(summary_parts)
     if show_options:
-        message_text = f"{_('Conversion options:', lang)}\n\n{summary}"
+        message_text = (
+            f"{_('Conversion options:', lang)}\n\n{summary}"
+            if summary
+            else _("Conversion options:", lang)
+        )
         buttons = build_options_keyboard(
             request_id,
             state,
@@ -75,7 +80,11 @@ def render_screen(
             cancel_label=_("Cancel", lang),
         )
         return message_text, buttons
-    message_text = f"{_('Select the format you want to convert to:', lang)}\n\n{summary}"
+    message_text = (
+        f"{_('Select the format you want to convert to:', lang)}\n\n{summary}"
+        if summary
+        else _("Select the format you want to convert to:", lang)
+    )
     buttons = format_button_rows(request_id, converter.supported_output_types, per_row=3)
     buttons.append(
         [
@@ -175,15 +184,15 @@ async def view_switch_callback(event: events.CallbackQuery.Event) -> None:
     await event.edit(message_text, buttons=buttons)
 
 
-@BOT.on(events.CallbackQuery(pattern=r"opt\|(rtl|fix_epub|flat_toc)\|\d+"))
+@BOT.on(events.CallbackQuery(pattern=r"opt\|(rtl|fix_epub|flat_toc)\|[01]\|\d+"))
 @tg_exceptions_handler
 async def options_toggle_callback(event: events.CallbackQuery.Event) -> None:
-    _opt, option_key, request_id = event.data.decode().split("|")
+    _opt, option_key, enabled_flag, request_id = event.data.decode().split("|")
     lang = get_lang(event.chat_id)
     state = await get_request_state(event, request_id)
     if not state:
         return
-    if not toggle_request_option(state, option_key):
+    if not set_request_option(state, option_key, enabled_flag == "1"):
         await event.answer(_("This option is available only for EPUB input.", lang), alert=True)
         return
     message_text, buttons = render_screen(request_id, state, lang, show_options=True)

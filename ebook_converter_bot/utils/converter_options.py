@@ -48,7 +48,7 @@ def build_options_keyboard(  # noqa: PLR0913
         [
             Button.inline(
                 f"{force_rtl_label}: {'✅' if state.force_rtl else '❌'}",
-                data=f"opt|rtl|{request_id}",
+                data=f"opt|rtl|{0 if state.force_rtl else 1}|{request_id}",
             )
         ]
     ]
@@ -58,13 +58,13 @@ def build_options_keyboard(  # noqa: PLR0913
                 [
                     Button.inline(
                         f"{fix_epub_label}: {'✅' if state.fix_epub else '❌'}",
-                        data=f"opt|fix_epub|{request_id}",
+                        data=f"opt|fix_epub|{0 if state.fix_epub else 1}|{request_id}",
                     )
                 ],
                 [
                     Button.inline(
                         f"{flat_toc_label}: {'✅' if state.flat_toc else '❌'}",
-                        data=f"opt|flat_toc|{request_id}",
+                        data=f"opt|flat_toc|{0 if state.flat_toc else 1}|{request_id}",
                     )
                 ],
             ]
@@ -74,15 +74,15 @@ def build_options_keyboard(  # noqa: PLR0913
     return rows
 
 
-def toggle_request_option(state: ConversionRequestState, option_key: str) -> bool:
+def set_request_option(state: ConversionRequestState, option_key: str, enabled: bool) -> bool:
     if option_key == "rtl":
-        state.force_rtl = not state.force_rtl
+        state.force_rtl = enabled
         return True
     if option_key == "fix_epub" and state.input_ext == "epub":
-        state.fix_epub = not state.fix_epub
+        state.fix_epub = enabled
         return True
     if option_key == "flat_toc" and state.input_ext == "epub":
-        state.flat_toc = not state.flat_toc
+        state.flat_toc = enabled
         return True
     return False
 
