@@ -143,6 +143,7 @@ config.json
 *.session
 *.session-journal
 *.pickle
+restart.json
 /*.sh
 tmp*
 *.exe

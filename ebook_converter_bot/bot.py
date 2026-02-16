@@ -51,6 +51,6 @@ async def run() -> None:
             restart_message["message"],
             "Restarted Successfully!",
         )
-        Path("restart.pickle").unlink()
+        Path("restart.json").unlink(missing_ok=True)
     async with BOT:
         await BOT.run_until_disconnected()
