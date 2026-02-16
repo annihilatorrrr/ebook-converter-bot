@@ -20,25 +20,22 @@ from telethon.tl.types import User
 
 def tg_exceptions_handler(func: Callable[..., Any]) -> Callable[..., Any]:
     @wraps(func)
-    async def wrapper(*args: Any, **kwargs: Any) -> Callable[..., Any]:
-        try:
-            return cast(Callable[..., Any], await func(*args, **kwargs))
-        except (
-            ChannelPrivateError,
-            ChatWriteForbiddenError,
-            UserIsBlockedError,
-            InterdcCallErrorError,
-            MessageNotModifiedError,
-            InputUserDeactivatedError,
-            MessageIdInvalidError,
-        ):
-            return lambda: None
-        except SlowModeWaitError as error:
-            await sleep(error.seconds)
-            return tg_exceptions_handler(await func(*args, **kwargs))
-        except FloodWaitError as error:
-            await sleep(error.seconds)
-            return tg_exceptions_handler(await func(*args, **kwargs))
+    async def wrapper(*args: Any, **kwargs: Any) -> Any | None:
+        while True:
+            try:
+                return await func(*args, **kwargs)
+            except (
+                ChannelPrivateError,
+                ChatWriteForbiddenError,
+                UserIsBlockedError,
+                InterdcCallErrorError,
+                MessageNotModifiedError,
+                InputUserDeactivatedError,
+                MessageIdInvalidError,
+            ):
+                return None
+            except (SlowModeWaitError, FloodWaitError) as error:
+                await sleep(error.seconds)
 
     return wrapper
 
