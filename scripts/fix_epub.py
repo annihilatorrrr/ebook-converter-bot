@@ -16,11 +16,21 @@ from ebook_converter_bot.utils.epub import fix_content_opf_problems, flatten_toc
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Fix common EPUB issues (content.opf duplicates/case/order)")
-    p.add_argument("inputs", nargs="*", help="Input .epub files or directories (default: *.epub in cwd)")
-    p.add_argument("--out-dir", help="Write fixed copies to this directory (default: modify in place)")
+    p = argparse.ArgumentParser(
+        description="Fix common EPUB issues (content.opf duplicates/case/order)"
+    )
+    p.add_argument(
+        "inputs", nargs="*", help="Input .epub files or directories (default: *.epub in cwd)"
+    )
+    p.add_argument(
+        "--out-dir", help="Write fixed copies to this directory (default: modify in place)"
+    )
     p.add_argument("--flat-toc", action="store_true", help="Also flatten toc.ncx and nav.xhtml")
-    p.add_argument("--rtl", action="store_true", help="Also set page-progression-direction=rtl and inject RTL css")
+    p.add_argument(
+        "--rtl",
+        action="store_true",
+        help="Also set page-progression-direction=rtl and inject RTL css",
+    )
     args = p.parse_args()
 
     inputs = [Path(x) for x in args.inputs] if args.inputs else sorted(Path().glob("*.epub"))
@@ -46,7 +56,7 @@ def main() -> None:
             flatten_toc(out)
         if args.rtl:
             set_epub_to_rtl(out)
-        print(f"{epub} -> {out}")
+        sys.stdout.write(f"{epub} -> {out}\n")
 
 
 if __name__ == "__main__":
