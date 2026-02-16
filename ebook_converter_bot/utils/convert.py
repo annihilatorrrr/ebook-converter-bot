@@ -32,6 +32,7 @@ class Converter:
         "djvu",
         "docx",
         "doc",
+        "kepub",
         "epub",
         "fb2",
         "fbz",
@@ -64,6 +65,7 @@ class Converter:
         "epub",
         "fb2",
         "htmlz",
+        "kepub",
         "kfx",
         "lit",
         "lrf",
@@ -176,6 +178,14 @@ class Converter:
         if output_type == "epub":
             return epub_file, set_to_rtl, conversion_error
 
+        if output_type == "kepub":
+            output_file = input_file.with_suffix(".kepub")
+            _, conversion_error = await self._run_command(
+                ["ebook-convert", str(epub_file), str(output_file)]
+            )
+            epub_file.unlink(missing_ok=True)
+            return output_file, set_to_rtl, conversion_error
+
         if output_type == "kfx":
             _, conversion_error = await self._convert_to_kfx(epub_file)
             epub_file.unlink(missing_ok=True)
@@ -211,7 +221,9 @@ class Converter:
         *,
         force_rtl: bool,
     ) -> tuple[Path, bool | None, str]:
-        output_file: Path = input_file.with_suffix(f".{output_type}")
+        output_file: Path = input_file.with_suffix(
+            ".kepub" if output_type == "kepub" else f".{output_type}"
+        )
         _, conversion_error = await self._convert_from_kfx_to_epub(input_file)
         if output_type == "epub":
             set_to_rtl: bool | None = set_epub_to_rtl(output_file) if force_rtl else None
@@ -254,6 +266,12 @@ class Converter:
 
         if output_type in self.supported_output_types:
             if input_type == output_type:
+                return output_file, set_to_rtl, conversion_error
+
+            if output_type == "kepub":
+                output_file = input_file.with_suffix(".kepub")
+                command = ["ebook-convert", str(input_file), str(output_file)]
+                _, conversion_error = await self._run_command(command)
                 return output_file, set_to_rtl, conversion_error
 
             command = ["ebook-convert", str(input_file), str(output_file)]

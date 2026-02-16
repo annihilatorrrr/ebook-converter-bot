@@ -53,6 +53,7 @@ async def file_converter(event: events.NewMessage.Event) -> None:
         Button.inline("🔸 epub", data=f"epub|{random_id}"),
         Button.inline("fb2", data=f"fb2|{random_id}"),
         Button.inline("htmlz", data=f"htmlz|{random_id}"),
+        Button.inline("kepub", data=f"kepub|{random_id}"),
         Button.inline("🔸 kfx", data=f"kfx|{random_id}"),
         Button.inline("lit", data=f"lit|{random_id}"),
         Button.inline("lrf", data=f"lrf|{random_id}"),
