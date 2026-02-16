@@ -278,7 +278,7 @@ class Converter:
 
             command = ["ebook-convert", str(input_file), str(output_file)]
             if output_type == "docx":
-                command.extend(["--filter-css", "margin-left,margin-right"])
+                command.extend(["--filter-css", "float"])
             _, conversion_error = await self._run_command(command)
 
             if output_type == "epub" and force_rtl:
