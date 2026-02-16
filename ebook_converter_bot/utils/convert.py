@@ -5,7 +5,6 @@ from asyncio.subprocess import PIPE, STDOUT, Process
 from os import getpgid, killpg, setsid
 from pathlib import Path
 from signal import SIGKILL
-from string import Template
 from typing import ClassVar
 
 from ebook_converter_bot.utils.bok_to_epub import bok_to_epub
@@ -92,17 +91,6 @@ class Converter:
     ]
     kfx_input_allowed_types: ClassVar[list[str]] = ["azw8", "kfx", "kfx-zip"]
 
-    def __init__(self) -> None:
-        self._convert_command = Template('ebook-convert "$input_file" "$output_file"')
-        # TODO: Add the ability to use converter options
-        # https://manual.calibre-ebook.com/generated/en/ebook-convert.html
-        self._kfx_input_convert_command = Template(
-            'calibre-debug -r "KFX Input" -- "$input_file"'
-        )  # KFX to EPUB
-        self._kfx_output_convert_command = Template(
-            'calibre-debug -r "KFX Output" -- "$input_file"'
-        )
-
     @classmethod
     def get_supported_types(cls) -> list[str]:
         return sorted(set(cls.supported_input_types + cls.supported_output_types))
@@ -111,14 +99,13 @@ class Converter:
         return input_file.lower().split(".")[-1] in self.supported_input_types
 
     @staticmethod
-    async def _run_command(command: str) -> tuple[int | None, str]:
+    async def _run_command(command: list[str]) -> tuple[int | None, str]:
         conversion_error = ""
-        process: Process = await asyncio.create_subprocess_shell(  # noqa: S604
-            command,
+        process: Process = await asyncio.create_subprocess_exec(
+            *command,
             stdin=PIPE,
             stdout=PIPE,
             stderr=STDOUT,
-            shell=True,
             preexec_fn=setsid,
         )
         try:
@@ -155,18 +142,14 @@ class Converter:
         :param input_file: Pathname of the .epub, .opf, .mobi, .doc, .docx, .kpf, or .kfx-zip file to be converted
         :return:
         """
-        return await self._run_command(
-            self._kfx_output_convert_command.safe_substitute(input_file=input_file)
-        )
+        return await self._run_command(["calibre-debug", "-r", "KFX Output", "--", str(input_file)])
 
     async def _convert_from_kfx_to_epub(self, input_file: Path) -> tuple[int | None, str]:
         """Convert a KFX ebook to EPUB
         :param input_file: Pathname of the .azw8, .kfx, .kfx-zip, or .kpf file to be processed
         :return:
         """
-        return await self._run_command(
-            self._kfx_input_convert_command.safe_substitute(input_file=input_file)
-        )
+        return await self._run_command(["calibre-debug", "-r", "KFX Input", "--", str(input_file)])
 
     async def _convert_from_bok(
         self,
@@ -199,7 +182,7 @@ class Converter:
             return input_file.with_suffix(".kfx"), set_to_rtl, conversion_error
 
         _, conversion_error = await self._run_command(
-            self._convert_command.safe_substitute(input_file=epub_file, output_file=output_file)
+            ["ebook-convert", str(epub_file), str(output_file)]
         )
         epub_file.unlink(missing_ok=True)
         return output_file, set_to_rtl, conversion_error
@@ -236,9 +219,7 @@ class Converter:
 
         epub_file: Path = input_file.with_suffix(".epub")
         set_to_rtl: bool | None = set_epub_to_rtl(epub_file) if force_rtl else None
-        await self._run_command(
-            self._convert_command.safe_substitute(input_file=epub_file, output_file=output_file)
-        )
+        await self._run_command(["ebook-convert", str(epub_file), str(output_file)])
         epub_file.unlink(missing_ok=True)
         return output_file, set_to_rtl, conversion_error
 
@@ -275,11 +256,9 @@ class Converter:
             if input_type == output_type:
                 return output_file, set_to_rtl, conversion_error
 
-            command = self._convert_command.safe_substitute(
-                input_file=input_file, output_file=output_file
-            )
+            command = ["ebook-convert", str(input_file), str(output_file)]
             if output_type == "docx":
-                command += " --filter-css margin-left,margin-right"
+                command.extend(["--filter-css", "margin-left,margin-right"])
             _, conversion_error = await self._run_command(command)
 
             if output_type == "epub" and force_rtl:

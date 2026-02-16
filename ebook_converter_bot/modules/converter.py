@@ -42,10 +42,9 @@ async def file_converter(event: events.NewMessage.Event) -> None:
         await event.reply(_("Files larger than 25 MB are not supported!", lang))
         return
     reply = await event.reply(_("Downloading the file...", lang))
-    downloaded = await message.download_media(f"/tmp/{file.name}")  # noqa: S108
-    if " " in downloaded:
-        Path(downloaded).rename(downloaded.replace(" ", "_"))
-        downloaded = downloaded.replace(" ", "_")
+    download_dir = Path("/tmp/ebook_converter_bot")  # noqa: S108
+    download_dir.mkdir(parents=True, exist_ok=True)
+    downloaded = await message.download_media(download_dir)
     random_id = "".join(sample(digits, 8))
     queue.update({random_id: downloaded})
     buttons = [
