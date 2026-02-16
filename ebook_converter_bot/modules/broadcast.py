@@ -51,12 +51,12 @@ async def broadcast_handler(event: events.NewMessage.Event) -> None:
             logger.warning(f"Failed to send message to {chat}:\n{err}")
             remove_chat(chat.user_id)
     broadcast_status_message: str = _(
-        f"Broadcasting completed! Message was sent to {sent_successfully} chats\n",
+        "Broadcasting completed! Message was sent to {} chats\n",
         lang,
-    )
+    ).format(sent_successfully)
     if failed_to_send:
         broadcast_status_message += _(
-            f"Failed to broadcast to {failed_to_send} chats, most likely because bot has been stopped or kicked out.",
+            "Failed to broadcast to {} chats, most likely because bot has been stopped or kicked out.",
             lang,
-        )
+        ).format(failed_to_send)
     await event.reply(broadcast_status_message)
