@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 from ebook_converter_bot import PARENT_DIR
 from ebook_converter_bot.db.base import Base
@@ -16,4 +16,7 @@ engine = create_engine(db_connection_string, connect_args={"check_same_thread": 
 Base.metadata.create_all(bind=engine)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-session = SessionLocal()
+
+
+def get_session() -> Session:
+    return SessionLocal()

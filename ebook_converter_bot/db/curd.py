@@ -1,12 +1,27 @@
+from collections.abc import Callable
+from functools import wraps
+from typing import Any
+
+from sqlalchemy.orm import Session
 from sqlalchemy.sql.functions import sum as sql_sum
 
 from ebook_converter_bot.db.models.analytics import Analytics
 from ebook_converter_bot.db.models.chat import Chat
 from ebook_converter_bot.db.models.preference import Preference
-from ebook_converter_bot.db.session import session
+from ebook_converter_bot.db.session import get_session
 
 
-def generate_analytics_columns(formats: list[str]) -> None:
+def with_session(func: Callable[..., Any]) -> Callable[..., Any]:
+    @wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        with get_session() as session:
+            return func(*args, session=session, **kwargs)
+
+    return wrapper
+
+
+@with_session
+def generate_analytics_columns(formats: list[str], *, session: Session) -> None:
     existing = {row[0] for row in session.query(Analytics.format).all()}
     missing = [f for f in formats if f not in existing]
     if not missing:
@@ -15,7 +30,8 @@ def generate_analytics_columns(formats: list[str]) -> None:
     session.commit()
 
 
-def update_format_analytics(file_format: str, output: bool = False) -> None:
+@with_session
+def update_format_analytics(file_format: str, output: bool = False, *, session: Session) -> None:
     file_format_analytics: Analytics | None = (
         session.query(Analytics).filter(Analytics.format == file_format).first()
     )
@@ -28,13 +44,15 @@ def update_format_analytics(file_format: str, output: bool = False) -> None:
     session.commit()
 
 
-def add_chat_to_db(user_id: int, user_name: str, chat_type: int) -> None:
+@with_session
+def add_chat_to_db(user_id: int, user_name: str, chat_type: int, *, session: Session) -> None:
     if not session.query(Chat).filter(Chat.user_id == user_id).first():
         session.add(Chat(user_id=user_id, user_name=user_name, type=chat_type))
         session.commit()
 
 
-def remove_chat(user_id: int) -> bool:
+@with_session
+def remove_chat(user_id: int, *, session: Session) -> bool:
     chat = session.query(Chat).filter(Chat.user_id == user_id).first()
     if not chat:
         return False
@@ -43,7 +61,8 @@ def remove_chat(user_id: int) -> bool:
     return True
 
 
-def increment_usage(user_id: int) -> None:
+@with_session
+def increment_usage(user_id: int, *, session: Session) -> None:
     chat = session.query(Chat).filter(Chat.user_id == user_id).first()
     if not chat:
         return
@@ -51,7 +70,8 @@ def increment_usage(user_id: int) -> None:
     session.commit()
 
 
-def update_language(user_id: int, language: str) -> None:
+@with_session
+def update_language(user_id: int, language: str, *, session: Session) -> None:
     chat: Preference | None = (
         session.query(Preference).filter(Preference.user_id == user_id).first()
     )
@@ -63,26 +83,30 @@ def update_language(user_id: int, language: str) -> None:
     session.commit()
 
 
-def get_lang(user_id: int) -> str:
+@with_session
+def get_lang(user_id: int, *, session: Session) -> str:
     language: str = (
         session.query(Preference.language).filter(Preference.user_id == user_id).scalar()
     )
     return language or "en"
 
 
-def get_chats_count() -> tuple[int, int]:
+@with_session
+def get_chats_count(*, session: Session) -> tuple[int, int]:
     all_chats = session.query(Chat).count()
     active_chats = session.query(Chat).filter(Chat.usage_times > 0).count()
     return all_chats, active_chats
 
 
-def get_usage_count() -> tuple[int, int]:
+@with_session
+def get_usage_count(*, session: Session) -> tuple[int, int]:
     usage_times: int = session.query(sql_sum(Chat.usage_times)).scalar() or 0
     output_times: int = session.query(sql_sum(Analytics.output_times)).scalar() or 0
     return usage_times, output_times
 
 
-def get_top_formats() -> tuple[dict[str, int], dict[str, int]]:
+@with_session
+def get_top_formats(*, session: Session) -> tuple[dict[str, int], dict[str, int]]:
     out_formats: list[Analytics] = (
         session.query(Analytics).order_by(Analytics.output_times.desc()).limit(5).all()
     )
@@ -94,5 +118,6 @@ def get_top_formats() -> tuple[dict[str, int], dict[str, int]]:
     }
 
 
-def get_all_chats() -> list[Chat]:
+@with_session
+def get_all_chats(*, session: Session) -> list[Chat]:
     return session.query(Chat).all()
