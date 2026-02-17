@@ -44,11 +44,16 @@ msgid "Force RTL"
 msgstr "RTL'ye zorla"
 
 #: ebook_converter_bot/modules/converter.py:61
+#: ebook_converter_bot/modules/converter.py:97
+msgid "Compress cover"
+msgstr "Kapak görselini sıkıştır"
+
+#: ebook_converter_bot/modules/converter.py:62
 #: ebook_converter_bot/modules/converter.py:103
 msgid "Fix EPUB before converting"
 msgstr "Dönüştürmeden önce EPUB'u düzelt"
 
-#: ebook_converter_bot/modules/converter.py:62
+#: ebook_converter_bot/modules/converter.py:63
 #: ebook_converter_bot/modules/converter.py:107
 msgid "Flatten EPUB TOC"
 msgstr "EPUB içindekiler tablosunu düzleştir"

@@ -9,6 +9,7 @@ HIGHLIGHTED_FORMATS: set[str] = {"azw3", "docx", "epub", "kfx", "mobi", "pdf"}
 CONTEXT_TYPES: tuple[str, ...] = ("docx", "epub", "pdf", "kfx")
 GLOBAL_BOOL_OPTIONS: tuple[tuple[str, str], ...] = (
     ("rtl", "force_rtl_label"),
+    ("compress_cover", "compress_cover_label"),
     ("smarten", "smarten_punctuation_label"),
     ("remove_paragraph_spacing", "remove_paragraph_spacing_label"),
 )
@@ -65,6 +66,7 @@ CONTEXT_BOOL_OPTIONS: dict[str, tuple[tuple[str, str], ...]] = {
 }
 BOOL_OPTION_ATTRS: dict[str, str] = {
     "rtl": "force_rtl",
+    "compress_cover": "compress_cover",
     "fix_epub": "fix_epub",
     "flat_toc": "flat_toc",
     "smarten": "smarten_punctuation",
@@ -103,6 +105,7 @@ class ConversionRequestState:
     queued_at: float
     input_ext: str
     force_rtl: bool = False
+    compress_cover: bool = False
     fix_epub: bool = False
     flat_toc: bool = False
     smarten_punctuation: bool = False
@@ -207,6 +210,7 @@ def build_options_keyboard(
 def set_request_option(state: ConversionRequestState, option_key: str, option_value: str) -> bool:
     if option_key == "reset":
         state.force_rtl = False
+        state.compress_cover = False
         state.fix_epub = False
         state.flat_toc = False
         state.smarten_punctuation = False

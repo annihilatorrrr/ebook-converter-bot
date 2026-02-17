@@ -24,6 +24,7 @@ TASK_TIMEOUT = 600  # 10 min
 @dataclass
 class ConversionOptions:
     force_rtl: bool = False
+    compress_cover: bool = False
     fix_epub: bool = False
     flat_toc: bool = False
     smarten_punctuation: bool = False
@@ -41,6 +42,7 @@ class ConversionOptions:
 
 
 class Converter:
+    polish_supported_types: ClassVar[set[str]] = {"azw3", "epub", "kepub"}
     supported_input_types: ClassVar[list[str]] = [
         "azw",
         "azw3",
@@ -224,6 +226,14 @@ class Converter:
     async def _convert_from_kfx_to_epub(self, input_file: Path) -> tuple[int | None, str]:
         return await self._run_command(["calibre-debug", "-r", "KFX Input", "--", str(input_file)])
 
+    async def _compress_cover(self, output_file: Path, output_type: str) -> str:
+        if output_type not in self.polish_supported_types or not output_file.exists():
+            return ""
+        _, compression_error = await self._run_command(
+            ["ebook-polish", "--compress-images", str(output_file)]
+        )
+        return compression_error
+
     async def _convert_from_bok(
         self,
         input_file: Path,
@@ -369,6 +379,7 @@ class Converter:
             if output_type == "kfx":
                 epub_options = replace(
                     options,
+                    compress_cover=False,
                     smarten_punctuation=False,
                     change_justification="original",
                     remove_paragraph_spacing=False,
@@ -404,7 +415,19 @@ class Converter:
         options = options or ConversionOptions()
         input_type = input_file.suffix.lower()[1:]
         if input_type == "bok":
-            return await self._convert_from_bok(input_file, output_type, options)
-        if input_type == "pdf":
-            return await self._convert_from_pdf(input_file, output_type, options)
-        return await self._convert_non_bok(input_file, output_type, options)
+            output_file, converted_to_rtl, conversion_error = await self._convert_from_bok(
+                input_file, output_type, options
+            )
+        elif input_type == "pdf":
+            output_file, converted_to_rtl, conversion_error = await self._convert_from_pdf(
+                input_file, output_type, options
+            )
+        else:
+            output_file, converted_to_rtl, conversion_error = await self._convert_non_bok(
+                input_file, output_type, options
+            )
+        if options.compress_cover:
+            compression_error = await self._compress_cover(output_file, output_type)
+            if compression_error:
+                conversion_error = f"{conversion_error}\n{compression_error}".strip()
+        return output_file, converted_to_rtl, conversion_error

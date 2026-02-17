@@ -12,6 +12,7 @@ from telethon.tl.types import KeyboardButtonCallback
 
 LABELS = {
     "force_rtl_label": "Force RTL",
+    "compress_cover_label": "Compress cover",
     "fix_epub_label": "Fix EPUB before converting",
     "flat_toc_label": "Flatten EPUB TOC",
     "smarten_punctuation_label": "Smarten punctuation",
@@ -75,6 +76,7 @@ def test_options_keyboard_context_tabs_and_docx_controls() -> None:
     assert rows[0][0].text.startswith("▸ DOCX")
 
     data = _flatten_data(rows)
+    assert b"opt|compress_cover|1|12345678" in data
     assert b"opt|docx_page_size|default|12345678" in data
     assert b"opt|docx_page_size|letter|12345678" in data
     assert b"opt|docx_page_size|a4|12345678" in data
@@ -150,6 +152,9 @@ def test_set_request_option_mutates_only_selected_flag() -> None:
     assert state.smarten_punctuation is True
     assert state.remove_paragraph_spacing is False
 
+    assert set_request_option(state, "compress_cover", "1") is True
+    assert state.compress_cover is True
+
     assert set_request_option(state, "change_justification", "left") is True
     assert state.change_justification == "left"
     assert state.docx_page_size == "default"
@@ -194,6 +199,7 @@ def test_set_request_option_reset_clears_all_options() -> None:
         queued_at=monotonic(),
         input_ext="epub",
         force_rtl=True,
+        compress_cover=True,
         fix_epub=True,
         flat_toc=True,
         smarten_punctuation=True,
@@ -212,6 +218,7 @@ def test_set_request_option_reset_clears_all_options() -> None:
 
     assert set_request_option(state, "reset", "1") is True
     assert state.force_rtl is False
+    assert state.compress_cover is False
     assert state.fix_epub is False
     assert state.flat_toc is False
     assert state.smarten_punctuation is False

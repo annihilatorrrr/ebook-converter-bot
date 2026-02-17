@@ -44,11 +44,16 @@ msgid "Force RTL"
 msgstr "إجبار جهة النص من اليمين لليسار"
 
 #: ebook_converter_bot/modules/converter.py:61
+#: ebook_converter_bot/modules/converter.py:97
+msgid "Compress cover"
+msgstr "ضغط الغلاف"
+
+#: ebook_converter_bot/modules/converter.py:62
 #: ebook_converter_bot/modules/converter.py:103
 msgid "Fix EPUB before converting"
 msgstr "إصلاح الكتاب قبل التحويل"
 
-#: ebook_converter_bot/modules/converter.py:62
+#: ebook_converter_bot/modules/converter.py:63
 #: ebook_converter_bot/modules/converter.py:107
 msgid "Flatten EPUB TOC"
 msgstr "تسطيح فهرس الكتاب"

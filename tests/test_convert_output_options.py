@@ -157,3 +157,24 @@ def test_epub_remove_background_applies_for_epub_input_to_epub_output(tmp_path: 
         )
 
     asyncio.run(run())
+
+
+def test_compress_cover_runs_ebook_polish_for_supported_outputs(tmp_path: Path) -> None:
+    async def run() -> None:
+        converter = Converter()
+        commands = _capture_commands(converter)
+        input_file = tmp_path / "book.txt"
+        input_file.write_text("hello")
+        output_file = input_file.with_suffix(".epub")
+        output_file.write_text("converted")
+
+        await converter.convert_ebook(
+            input_file,
+            "epub",
+            options=ConversionOptions(compress_cover=True),
+        )
+
+        assert commands[0][0] == "ebook-convert"
+        assert commands[1] == ["ebook-polish", "--compress-images", str(output_file)]
+
+    asyncio.run(run())

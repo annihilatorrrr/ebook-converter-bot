@@ -58,6 +58,7 @@ queue_cleanup_task = BOT.loop.create_task(cleanup_queue_loop())
 def options_labels(lang: str) -> dict[str, str]:
     return {
         "force_rtl_label": _("Force RTL", lang),
+        "compress_cover_label": _("Compress cover", lang),
         "fix_epub_label": _("Fix EPUB before converting", lang),
         "flat_toc_label": _("Flatten EPUB TOC", lang),
         "smarten_punctuation_label": _("Smarten punctuation", lang),
@@ -93,6 +94,7 @@ def render_options_summary(state: ConversionRequestState, lang: str) -> str:
         text
         for enabled, text in (
             (state.force_rtl, _("Force RTL", lang)),
+            (state.compress_cover, _("Compress cover", lang)),
             (state.smarten_punctuation, _("Smarten punctuation", lang)),
             (state.remove_paragraph_spacing, _("Remove paragraph spacing", lang)),
             (
@@ -138,6 +140,7 @@ def build_conversion_options(state: ConversionRequestState) -> ConversionOptions
     options = ConversionOptions()
     option_values = {
         "force_rtl": state.force_rtl,
+        "compress_cover": state.compress_cover,
         "fix_epub": state.fix_epub if state.input_ext == "epub" else False,
         "flat_toc": state.flat_toc if state.input_ext == "epub" else False,
         "smarten_punctuation": state.smarten_punctuation,
