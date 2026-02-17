@@ -1,13 +1,15 @@
 import asyncio
 from pathlib import Path
 
-from ebook_converter_bot.utils.convert import ConversionOptions, Converter
+from ebook_converter_bot.utils.convert import TASK_TIMEOUT, ConversionOptions, Converter
 
 
 def _capture_commands(converter: Converter) -> list[list[str]]:
     commands: list[list[str]] = []
 
-    async def fake_run(command: list[str]) -> tuple[int | None, str]:
+    async def fake_run(
+        command: list[str], timeout: int | None = TASK_TIMEOUT
+    ) -> tuple[int | None, str]:
         commands.append(command)
         return 0, ""
 
@@ -176,5 +178,54 @@ def test_compress_cover_runs_ebook_polish_for_supported_outputs(tmp_path: Path) 
 
         assert commands[0][0] == "ebook-convert"
         assert commands[1] == ["ebook-polish", "--compress-images", str(output_file)]
+
+    asyncio.run(run())
+
+
+def test_convert_ebook_passes_timeout_to_run_command(tmp_path: Path) -> None:
+    async def run() -> None:
+        converter = Converter()
+        timeouts: list[int | None] = []
+
+        async def fake_run(
+            command: list[str], timeout: int | None = TASK_TIMEOUT
+        ) -> tuple[int | None, str]:
+            timeouts.append(timeout)
+            return 0, ""
+
+        converter._run_command = fake_run  # type: ignore[method-assign]
+        input_file = tmp_path / "book.txt"
+        input_file.write_text("hello")
+
+        await converter.convert_ebook(input_file, "epub")
+        await converter.convert_ebook(input_file, "epub", timeout=None)
+
+        assert timeouts == [TASK_TIMEOUT, None]
+
+    asyncio.run(run())
+
+
+def test_convert_ebook_passes_timeout_to_bok_flow(tmp_path: Path) -> None:
+    async def run() -> None:
+        converter = Converter()
+        captured_timeouts: list[int | None] = []
+
+        async def fake_convert_from_bok(
+            input_file: Path,
+            output_type: str,
+            options: ConversionOptions,
+            timeout: int | None = TASK_TIMEOUT,
+        ) -> tuple[Path, bool | None, str]:
+            captured_timeouts.append(timeout)
+            return input_file.with_suffix(f".{output_type}"), None, ""
+
+        converter._convert_from_bok = fake_convert_from_bok  # type: ignore[method-assign]
+        input_file = tmp_path / "book.bok"
+        input_file.write_text("hello")
+
+        await converter.convert_ebook(input_file, "epub")
+        await converter.convert_ebook(input_file, "epub", timeout=None)
+
+        assert captured_timeouts == [TASK_TIMEOUT, None]
 
     asyncio.run(run())

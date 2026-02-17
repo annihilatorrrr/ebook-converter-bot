@@ -9,10 +9,11 @@ from typing import cast
 
 from telethon import Button, events
 
+from ebook_converter_bot import TG_BOT_ADMINS
 from ebook_converter_bot.bot import BOT
 from ebook_converter_bot.db.curd import get_lang
 from ebook_converter_bot.utils.analytics import analysis
-from ebook_converter_bot.utils.convert import ConversionOptions, Converter
+from ebook_converter_bot.utils.convert import TASK_TIMEOUT, ConversionOptions, Converter
 from ebook_converter_bot.utils.converter_options import (
     CONTEXT_TYPES,
     ConversionRequestState,
@@ -33,6 +34,7 @@ CB_FMT = "fmt"
 CB_CANCEL = "cancel"
 
 converter = Converter()
+BOT_ADMIN_IDS = set(TG_BOT_ADMINS)
 if "converter_queue" not in BOT.__dict__:
     BOT.__dict__["converter_queue"] = {}
 queue: dict[str, ConversionRequestState] = cast(
@@ -202,7 +204,7 @@ async def get_request_state(
 ) -> ConversionRequestState | None:
     cleanup_expired_requests(queue, ttl_seconds=QUEUE_TTL_SECONDS)
     lang = get_lang(event.chat_id)
-    state = queue.pop(request_id, None) if pop else queue.get(request_id)
+    state = queue.get(request_id)
     if not state:
         await event.answer(
             _("This conversion request expired. Please send the file again.", lang),
@@ -217,7 +219,9 @@ async def get_request_state(
             alert=True,
         )
         return None
-    if not pop:
+    if pop:
+        queue.pop(request_id, None)
+    else:
         state.queued_at = monotonic()
     return state
 
@@ -244,7 +248,7 @@ async def file_converter(event: events.NewMessage.Event) -> None:
         # Unsupported file
         await event.reply(_("The file you sent is not a supported type!", lang))
         return
-    if file.size > MAX_ALLOWED_FILE_SIZE:
+    if event.sender_id not in BOT_ADMIN_IDS and file.size > MAX_ALLOWED_FILE_SIZE:
         await event.reply(_("Files larger than 25 MB are not supported!", lang))
         return
     reply = await event.reply(_("Downloading the file...", lang))
@@ -317,14 +321,10 @@ async def options_toggle_callback(event: events.CallbackQuery.Event) -> None:
 @tg_exceptions_handler
 async def cancel_conversion_callback(event: events.CallbackQuery.Event) -> None:
     _cancel, request_id = event.data.decode().split("|")
-    lang = get_lang(event.chat_id)
-    state = queue.pop(request_id, None)
+    state = await get_request_state(event, request_id, pop=True)
     if not state:
-        await event.answer(
-            _("This conversion request expired. Please send the file again.", lang),
-            alert=True,
-        )
         return
+    lang = get_lang(event.chat_id)
     Path(state.input_file_path).unlink(missing_ok=True)
     await event.edit(_("Conversion request canceled.", lang))
 
@@ -349,6 +349,7 @@ async def converter_callback(
         input_file,
         output_type,
         options=options,
+        timeout=None if event.sender_id in BOT_ADMIN_IDS else TASK_TIMEOUT,
     )
     if output_file.exists():
         message_text = ""
