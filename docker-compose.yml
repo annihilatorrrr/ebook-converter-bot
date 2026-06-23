@@ -6,6 +6,8 @@ services:
       dockerfile: Dockerfile
     working_dir: /app
     command: ["/opt/venv/bin/python", "-m", "ebook_converter_bot"]
+    init: true
+    pids_limit: 2048
     environment:
       - PUID=1000
       - PGID=1000

@@ -130,6 +130,7 @@ async def run_command(command: list[str], *, cwd: Path = PARENT_DIR) -> tuple[st
         )
     except TimeoutError:
         process.kill()
+        await process.wait()
         return "Process timed out", -1
     output = (stdout + stderr).decode("utf-8", errors="replace").strip()
     return output, process.returncode or 0

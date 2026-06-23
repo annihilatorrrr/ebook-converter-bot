@@ -3,8 +3,9 @@ import logging
 import os
 import re
 from asyncio.subprocess import PIPE, STDOUT, Process
+from contextlib import suppress
 from dataclasses import dataclass, replace
-from os import getpgid, killpg, setsid
+from os import killpg, setsid
 from pathlib import Path
 from shutil import copy2
 from signal import SIGKILL
@@ -832,6 +833,7 @@ class Converter:
                 stdout_handle.close()
             return None, f"{command[0]} is required but was not found."
 
+        timed_out = False
         try:
             timeout_error = ""
             if timeout is None:
@@ -859,14 +861,17 @@ class Converter:
         except asyncio.exceptions.TimeoutError:
             logger.info(f"Timeout while running command: {command}")
             timeout_error = f"Timeout while running command: {command[0]}"
-        try:
-            # If it timed out terminate the process and its child processes.
-            killpg(getpgid(process.pid), SIGKILL)
-            process.kill()
-        except OSError:
-            pass  # Ignore 'no such process' error
-        if stdout_handle:
-            stdout_handle.close()
+            timed_out = True
+        finally:
+            # ponytail: Docker init reaps adopted children; this only cleans up this process group.
+            with suppress(OSError):
+                killpg(process.pid, SIGKILL)
+            if timed_out:
+                with suppress(OSError):
+                    process.kill()
+                await process.wait()
+            if stdout_handle:
+                stdout_handle.close()
         return process.returncode, conversion_error or timeout_error
 
     @staticmethod

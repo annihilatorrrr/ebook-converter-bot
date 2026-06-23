@@ -24,6 +24,7 @@ EXPECTED_PANDOC_RTL_MD_FILTERS = 4
 EXPECTED_PANDOC_DOCX_RTL_FILTERS = 4
 EXPECTED_PANDOC_DOCX_RTL_MD_FILTERS = 5
 EXPECTED_PANDOC_DOCX_RTL_HTML_FILTERS = 4
+KILLED_RETURNCODE = -9
 OPTION_CASES = [
     {
         "output_type": "docx",
@@ -108,6 +109,49 @@ def test_pdf_font_env_is_limited_to_pdf_ebook_convert(monkeypatch) -> None:
         )
         is None
     )
+
+
+def test_run_command_waits_after_timeout(monkeypatch) -> None:
+    class FakeProcess:
+        pid = 123
+        returncode = None
+        killed = False
+        waited = False
+
+        async def communicate(self) -> tuple[bytes, bytes]:
+            await asyncio.sleep(10)
+            return b"", b""
+
+        def kill(self) -> None:
+            self.killed = True
+            self.returncode = KILLED_RETURNCODE
+
+        async def wait(self) -> int:
+            self.waited = True
+            return self.returncode or 0
+
+    fake_process = FakeProcess()
+    killed_groups: list[tuple[int, int]] = []
+
+    async def fake_create_subprocess_exec(*args, **kwargs) -> FakeProcess:
+        return fake_process
+
+    monkeypatch.setattr(
+        convert_utils.asyncio, "create_subprocess_exec", fake_create_subprocess_exec
+    )
+    monkeypatch.setattr(
+        convert_utils,
+        "killpg",
+        lambda process_group, signal: killed_groups.append((process_group, signal)),
+    )
+
+    returncode, error = asyncio.run(Converter._run_command(["sleep", "10"], timeout=0.01))
+
+    assert returncode == KILLED_RETURNCODE
+    assert error == "Timeout while running command: sleep"
+    assert fake_process.killed is True
+    assert fake_process.waited is True
+    assert killed_groups == [(123, convert_utils.SIGKILL)]
 
 
 def _lua_filter_args(output_file: Path, suffixes: list[str]) -> list[str]:
